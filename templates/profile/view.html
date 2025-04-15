@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Profile of {{ user.username }}</h1>
+  <p>Username: {{ user.username }}</p>
+  <!-- Additional profile details can be added here -->
+  <a href="{{ url_for('profile.edit_profile') }}" class="btn btn-primary">Edit Profile</a>
+{% endblock %}

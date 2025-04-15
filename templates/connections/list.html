@@ -1,0 +1,22 @@
+<!-- app/templates/connections/list.html -->
+{% extends "base.html" %}
+{% block content %}
+  <h1>Your Connections</h1>
+  {% if connections %}
+    <ul>
+      {% for connection in connections %}
+        <li>{{ connection }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>You have no connections yet.</p>
+  {% endif %}
+  <h2>Add a New Connection</h2>
+  <form method="POST" action="{{ url_for('connections.add_connection') }}">
+    <div class="form-group">
+      <label for="username">Friend's Username</label>
+      <input type="text" name="username" class="form-control" placeholder="Enter username">
+    </div>
+    <button type="submit" class="btn btn-primary">Add Connection</button>
+  </form>
+{% endblock %}

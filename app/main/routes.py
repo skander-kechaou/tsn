@@ -1,6 +1,9 @@
 # app/main/routes.py
-from flask import Blueprint, render_template
-from flask_user import login_required
+from flask import Blueprint, render_template, request, redirect, url_for
+from flask_user import login_required, current_user
+
+from app.models import Post, VisibilityEnum
+from app import db
 
 bp = Blueprint('main', __name__, template_folder='templates')
 
@@ -11,5 +14,28 @@ def index():
 @bp.route('/dashboard')
 @login_required
 def dashboard():
-    # Here, you can query for recent activities, friend suggestions, etc.
-    return render_template('main/dashboard.html')
+    # get posts
+    posts = Post.query.filter(
+        (Post.visibility == VisibilityEnum.PUBLIC) |
+        ((Post.visibility == VisibilityEnum.FRIENDS) & (Post.user_id.in_(current_user.friend_ids()))) |
+        ((Post.visibility == VisibilityEnum.PRIVATE) & (Post.user_id == current_user.id))
+    ).all()
+
+    return render_template('main/dashboard.html', posts=posts)
+
+@bp.route('/create_post', methods=['GET', 'POST'])
+@login_required
+def create_post():
+    if request.method == 'POST':
+        content = request.form['content']
+        visibility = request.form['visibility']
+        post = Post(
+            user_id=current_user.id,
+            content=content,
+            visibility=VisibilityEnum(visibility)
+        )
+        db.session.add(post)
+        db.session.commit()
+        return redirect(url_for('main.dashboard'))
+
+    return render_template('main/create_post.html')

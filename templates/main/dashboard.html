@@ -1,6 +1,21 @@
 {% extends "base.html" %}
+
 {% block content %}
   <h1>Dashboard</h1>
   <p>Welcome, {{ current_user.username }}!</p>
-  <p>This is where you can see your activities and recommendations.</p>
+  <a href="{{ url_for('main.create_post') }}" class="btn btn-success mb-3">+ New Post</a>
+
+  {% if posts %}
+    <div class="list-group">
+      {% for post in posts %}
+        <div class="list-group-item">
+          <strong>{{ post.user.username }}</strong>
+          <small class="text-muted">({{ post.visibility.value.capitalize() }})</small>
+          <p class="mt-2">{{ post.content }}</p>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p>No posts to display.</p>
+  {% endif %}
 {% endblock %}

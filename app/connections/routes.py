@@ -14,7 +14,6 @@ def connections():
 @bp.route('/connections/add', methods=['POST'])
 @login_required
 def add_connection():
-    # Handle logic to add a friend (e.g., via a form submission)
     new_friend_username = request.form.get('username')
     # Lookup user and update your connection table/graph structure
     flash(f"Connection request sent to {new_friend_username}", "success")

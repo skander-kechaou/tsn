@@ -6,7 +6,9 @@ from flask_login import LoginManager, login_user, logout_user, current_user, log
 from ..models import Post, VisibilityEnum, Like, User
 from .. import db
 
-bp = Blueprint('main', __name__, template_folder='templates')
+bp = Blueprint('main', __name__,
+               template_folder='templates',
+               static_folder='static')
 
 @bp.route('/')
 def index():

@@ -1,7 +1,93 @@
 {% extends "base.html" %}
+
+{% block title %}{{ title if title else user.username + "'s Profile" }} - {{ super() }}{% endblock %}
+
 {% block content %}
-  <h1>Profile of {{ user.username }}</h1>
-  <p>Username: {{ user.username }}</p>
-  <!-- Additional profile details can be added here -->
-  <a href="{{ url_for('profile.edit_profile') }}" class="btn btn-primary">Edit Profile</a>
+<div class="container profile-page mt-4">
+    <div class="row">
+        {# Left Sidebar - Profile Info Card #}
+        <div class="col-md-4">
+            <div class="card profile-card shadow-sm mb-4">
+                <div class="profile-header-bg" style="background-image: url('{{ url_for('static', filename='images/default_cover.jpg') }}');">
+                    {# Optional: Cover photo area #}
+                </div>
+                <div class="card-body text-center">
+                    <img src="{{ url_for('static', filename=user.profile_pic if user.profile_pic else 'images/default_profile.jpg') }}"
+                         alt="{{ user.username }}'s Profile Picture"
+                         class="profile-pic img-thumbnail rounded-circle mb-3">
+                    <h4 class="card-title">{{ user.first_name }} {{ user.last_name }}</h4>
+                    <p class="text-muted-custom">@{{ user.username }}</p>
+
+                    {% if user.bio %}
+                        <p class="profile-bio">{{ user.bio }}</p>
+                    {% endif %}
+
+                    <hr>
+                    {# More details - example #}
+                    <ul class="list-unstyled profile-details">
+                        {% if user.location %}
+                        <li><i class="fas fa-map-marker-alt mr-2 text-muted-custom"></i> {{ user.location }}</li>
+                        {% endif %}
+                        <li><i class="fas fa-calendar-alt mr-2 text-muted-custom"></i> Joined {{ user.date_joined.strftime('%B %Y') if user.date_joined else 'N/A' }}</li>
+                        {% if user.age %}
+                        <li><i class="fas fa-birthday-cake mr-2 text-muted-custom"></i> {{user.age}} years old</li>
+                        {% endif %}
+                        {# Add other details like website, etc. #}
+                    </ul>
+
+                    {% if current_user.is_authenticated and current_user.id == user.id %}
+                        <a href="{{ url_for('profile.edit_profile') }}" class="btn btn-secondary btn-sm mt-3">Edit Profile</a>
+                    {% else %}
+                        {# Add Follow/Unfollow button or Friend Request button here later #}
+                        {# <button class="btn btn-primary btn-sm mt-3">Follow</button> #}
+                    {% endif %}
+                </div>
+            </div>
+
+            {# You could add other sidebar elements here: Friends list, Groups, etc. #}
+        </div>
+
+        {# Right Content Area - User's Posts #}
+        <div class="col-md-8">
+            <h3 class="mb-3">Posts by {{ user.username }}</h3>
+            {% if posts %}
+                {% for post in posts %}
+                    <div class="card post-card shadow-sm mb-3">
+                        <div class="card-body">
+                            {# If Post model has 'author' backref to User #}
+                            <div class="d-flex align-items-center mb-2">
+                                <img src="{{ url_for('static', filename=post.author.profile_pic if post.author.profile_pic else 'images/default_profile.jpg') }}"
+                                     alt="{{ post.author.username }}" class="rounded-circle mr-2" style="width: 40px; height: 40px;">
+                                <div>
+                                    <a href="{{ url_for('profile.view_profile', username=post.author.username) }}" class="font-weight-bold text-dark">{{ post.author.username }}</a>
+                                    <small class="text-muted-custom d-block">
+                                        {{ post.timestamp.strftime('%b %d, %Y %I:%M %p') if post.timestamp else 'Some time ago' }}
+                                    </small>
+                                </div>
+                            </div>
+                            <p class="card-text">{{ post.content }}</p>
+                            {# Add like button, comment section placeholder, etc. #}
+                            <div class="post-actions mt-2">
+                                {# Example like button - assumes you have a like route and logic #}
+                                {# <form action="{{ url_for('main.like_post', post_id=post.id) }}" method="POST" style="display: inline;">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="fas fa-heart"></i>
+                                        {{ post.likes.count() }} {# Assuming 'likes' is a relationship on Post for Like objects #}
+                                    {# </button>
+                                </form> #}
+                                {# <a href="#" class="btn btn-sm btn-outline-secondary ml-2"><i class="fas fa-comment"></i> Comment</a> #}
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <p class="text-muted-custom">{{ user.username }} hasn't made any posts yet.</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
 {% endblock %}

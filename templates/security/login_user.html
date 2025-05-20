@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% from "security/_macros.html" import render_field_with_errors, render_field %} {# Ensure this macro file exists #}
+
+{% block title %}Log In - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <h2 class="card-title text-center mb-4">Log In to Your Account</h2>
+
+                    {# Display any general form errors passed by Flask-Security (e.g., "Invalid email or password") #}
+                    {% if login_user_form.errors and not login_user_form.has_field_errors %}
+                        <div class="alert alert-danger">
+                            {% for error_list in login_user_form.errors.values() %}
+                                {% for error in error_list %}
+                                    {{ error }}<br>
+                                {% endfor %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <form action="{{ url_for_security('login') }}" method="POST" name="login_user_form" novalidate>
+                        {{ login_user_form.hidden_tag() }} {# CSRF token, next URL, etc. #}
+
+                        {# Email Field #}
+                        {{ render_field_with_errors(login_user_form.email, class="form-control form-control-lg mb-3", placeholder="Email Address") }}
+
+                        {# Password Field #}
+                        {{ render_field_with_errors(login_user_form.password, class="form-control form-control-lg mb-3", placeholder="Password") }}
+
+                        {# Remember Me Checkbox - Check if it exists on the form #}
+                        {% if login_user_form.remember %}
+                            <div class="form-group form-check mb-3">
+                                {{ login_user_form.remember(class="form-check-input") }}
+                                {{ login_user_form.remember.label(class="form-check-label") }}
+                            </div>
+                        {% endif %}
+
+                        {# Submit Button #}
+                        {{ render_field(login_user_form.submit, class="btn btn-primary btn-lg btn-block") }}
+                    </form>
+
+                    <hr class="my-4">
+
+                    <div class="text-center">
+                        {% if security.recoverable %}
+                            <p class="mb-2"><a href="{{ url_for_security('forgot_password') }}">Forgot Your Password?</a></p>
+                        {% endif %}
+                        {% if security.registerable %}
+                            <p>Don't have an account? <a href="{{ url_for_security('register') }}">Sign Up</a></p>
+                        {% endif %}
+                    </div>
+
+                    {# Optional: Social Login Buttons (if you implement them later) #}
+                    {# <div class="text-center mt-3">
+                        <p class="text-muted-custom small">OR LOG IN WITH</p>
+                        <a href="{{ url_for('google.login') }}" class="btn btn-outline-danger btn-block mb-2"> {# Or your custom Google button style #}
+                            {# <i class="fab fa-google mr-2"></i> Google #}
+                        {# </a>
+                        Add other social logins here
+                    </div> #}
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

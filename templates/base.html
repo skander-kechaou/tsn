@@ -5,32 +5,53 @@
     <title>{{ title if title else "TSN Platform" }}</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
         <a class="navbar-brand" href="{{ url_for('main.index') }}">TSN Platform</a>
-        <div class="collapse navbar-collapse">
-            <ul class="navbar-nav mr-auto">
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">  {# Give your collapsible div an ID #}
+            {# Links that should appear after the brand, aligned left by default #}
+            <ul class="navbar-nav mr-auto"> {# mr-auto pushes everything after this to the right #}
                 {% if current_user.is_authenticated %}
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('main.dashboard') }}">Dashboard</a>
-                </li>
                     <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('main.users') }}">Users</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('profile.view_profile', username=current_user.username) }}">Profile</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('security.logout') }}">Logout</a>
-                </li>
+                        <a class="nav-link" href="{{ url_for('main.dashboard') }}">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.users') }}">Users</a> {# Assuming you have a main.users route #}
+                    </li>
+                {% endif %}
+                {# Add any other general left-aligned links here #}
+            </ul>
+
+            {# Links that should appear on the far right #}
+            <ul class="navbar-nav"> {# No mr-auto or ml-auto needed on this outer ul if the one above has mr-auto #}
+                                  {# Alternatively, you could use ml-auto on this ul if the first one didn't have mr-auto #}
+                {% if current_user.is_authenticated %}
+                    <li class="nav-item">
+                        {# Example of a dropdown for user options - Bootstrap style #}
+                        <div class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLink" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                {{ current_user.username }} {# Or current_user.email #}
+                            </a>
+                            <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
+                                <a class="dropdown-item" href="{{ url_for('profile.view_profile', username=current_user.username) }}">Profile</a>
+                                {# Add other user-specific links like settings here #}
+                                <div class="dropdown-divider"></div>
+                                <a class="dropdown-item" href="{{ url_for('security.logout') }}">Logout</a>
+                            </div>
+                        </div>
+                    </li>
                 {% else %}
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('security.login') }}">Login</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('security.register') }}">Register</a>
-                </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('security.login') }}">Login</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('security.register') }}">Register</a>
+                    </li>
                 {% endif %}
             </ul>
         </div>
@@ -46,6 +67,7 @@
         {% block content %}{% endblock %}
     </div>
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script> {# Popper.js is often a dependency for Bootstrap JS #}
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 </body>
 </html>

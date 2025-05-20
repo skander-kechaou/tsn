@@ -10,7 +10,7 @@
             {% for post in posts %}
                 <div class="post-card">
                     <div class="post-header">
-                        <span class="creator">{{ post.user.username }}</span>
+                        <span class="creator">{{ post.author.username }}</span>
                         <span class="visibility">({{ post.visibility.value.capitalize() }})</span>
                     </div>
                     <p>{{ post.content }}</p>

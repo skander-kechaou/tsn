@@ -1,47 +1,93 @@
+# tsn/app/__init__.py
 import os
-
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from flask_socketio import SocketIO
-from flask_security import Security, SQLAlchemyUserDatastore
-# Flask-Login components used by Flask-Security or directly
+from flask import Flask, template_rendered, request
+from flask_security import SQLAlchemyUserDatastore
+from .extensions import db, migrate, socketio, security # security is an empty Security() instance
 from .config import Config
 
-db = SQLAlchemy()
-migrate = Migrate()
-socketio = SocketIO()
-
+# ---> IMPORT YOUR CUSTOM FORM CLASS DIRECTLY <---
+from .auth.forms import ExtendedRegisterForm # Path: app/security/forms.py
 
 def create_app(config_class=Config):
-    base_dir = os.path.abspath(os.path.dirname(__file__))
-    template_dir = os.path.join(base_dir, '..', 'templates')
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    template_dir = os.path.join(project_root, 'templates')
+    static_dir = os.path.join(project_root, 'static')
 
-    app = Flask(__name__, template_folder=template_dir)
-    app.config.from_object(config_class)
+    app = Flask(__name__,
+                template_folder=template_dir,
+                static_folder=static_dir)
+    app.config.from_object(config_class) # Loads SECURITY_REGISTER_TEMPLATE, etc.
 
+    # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
-    socketio.init_app(app)  # Make sure sockets.py uses this socketio instance
+    socketio.init_app(app)
 
-    # Import models AFTER db is initialized and available
-    from .models import User, Role  # << IMPORTANT: Import Role as well
+    # --- SIGNAL HANDLER ---
+    @template_rendered.connect_via(app)
+    def _template_rendered_debug(sender, template, context, **extra):
+        # Only log for the /register route to avoid too much noise
+        if request and request.path == sender.config.get('SECURITY_REGISTER_URL', '/register'):
+            print(f"--- TEMPLATE RENDERED for {request.path} ---")
+            print(f"Template filename: {template.name}")  # template.name is the path used in render_template
+            print(f"Template object: {template}")
+            if 'register_user_form' in context:
+                print(f"Form object in context: {context['register_user_form'].__class__.__name__}")
+            else:
+                print(f"Form object 'register_user_form' NOT in context.")
+            print(f"--- END TEMPLATE RENDERED ---")
 
-    # Setup Flask-Security
+    # --- END SIGNAL HANDLER ---
+
+    # --- THIS IS THE MOST IMPORTANT PART FOR CUSTOM FORM ---
+    # Explicitly set the FORM CLASS OBJECT in app.config
+    app.config['SECURITY_REGISTER_FORM'] = ExtendedRegisterForm # Assign the imported class
+    # -------------------------------------------------------
+
+    # Add a debug print IMMEDIATELY AFTER loading config
+    print(
+        f"DEBUG: Value of SECURITY_REGISTER_TEMPLATE from app.config AFTER from_object: {app.config.get('SECURITY_REGISTER_TEMPLATE')}")
+
+    with app.app_context():
+        from .models import User, Role
+
     user_datastore = SQLAlchemyUserDatastore(db, User, Role)
-    security = Security(app, user_datastore)
 
-    # Register Blueprints
+    # Initialize Flask-Security. It will now read SECURITY_REGISTER_FORM from app.config
+    # and should see your ExtendedRegisterForm class object.
+    security.init_app(app, user_datastore)
+
+    # --- REVISED DEBUG PRINTS ---
+    print(f"--- AFTER SECURITY INIT - REVISED DIVE ---")
+    print(f"1. app.config['SECURITY_REGISTER_TEMPLATE']: {app.config.get('SECURITY_REGISTER_TEMPLATE')}")
+    print(
+        f"2. app.config['SECURITY_REGISTER_FORM'] (class object from app.config): {app.config.get('SECURITY_REGISTER_FORM')}")
+
+    # Try to access the form mapping directly if it exists
+    # Flask-Security usually has a way to get the form class for a given view name.
+    # The 'forms' attribute might be a dictionary or a FormRegistry like object
+    actual_register_form_class = None
+    if hasattr(security, 'forms'):  # 'forms' is a common attribute name for the registry
+        if isinstance(security.forms, dict) and 'register_form' in security.forms:
+            form_wrapper = security.forms['register_form']
+            actual_register_form_class = getattr(form_wrapper, 'cls', form_wrapper)  # .cls for newer, direct for older
+        elif hasattr(security.forms, 'get_form_class'):  # Method in some versions
+            actual_register_form_class = security.forms.get_form_class('register')  # or 'register_form'
+        elif hasattr(security.forms, 'register_form'):  # Direct attribute sometimes
+            actual_register_form_class = security.forms.register_form
+
+    print(f"3. Security object's actual resolved REGISTER form CLASS: {actual_register_form_class}")
+
+    print(f"--- END AFTER SECURITY INIT - REVISED DIVE ---")
+
+    # ... (Blueprints, main route, etc.) ...
     from .main.routes import bp as main_bp
-    from .profile.routes import bp as profile_bp
-    from .connections.routes import bp as connections_bp
-
     app.register_blueprint(main_bp)
-    app.register_blueprint(profile_bp)
-    app.register_blueprint(connections_bp)
 
-    # Sockets initialization (if you have a sockets.py with init_socketio_events)
-    from .sockets import init_socketio_events
-    init_socketio_events(socketio)
+    from .profile.routes import bp as profile_bp
+    app.register_blueprint(profile_bp)
+
+    from .connections.routes import bp as connections_bp
+    app.register_blueprint(connections_bp)
 
     return app

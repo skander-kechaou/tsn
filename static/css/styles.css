@@ -1,0 +1,245 @@
+/* tsn/static/css/style.css */
+
+:root {
+    --brand-primary: #09619f;       /* Dark Blue - For main actions, active links, highlights */
+    --brand-secondary: #f0a200;     /* Pure Orange - For attention-grabbing secondary actions, accents */
+    --brand-text-dark: #143454;     /* Very Dark Blue - For primary body text, headings */
+    --brand-text-light: #ffffff;    /* White - For text on dark backgrounds */
+    --brand-background-light: #f8f9fa; /* A slightly off-white, softer than pure white, or use #e2e2e2 */
+    --brand-background-subtle: #e2e2e2; /* Very Light Gray - For subtle backgrounds, borders, dividers */
+    --brand-background-dark: var(--brand-text-dark); /* Using Very Dark Blue as a dark bg option */
+
+    /* Bootstrap variable overrides (optional, but can help with consistency) */
+    --primary: var(--brand-primary);
+    --secondary: var(--brand-secondary);
+    --light: var(--brand-background-light); /* Override Bootstrap's .bg-light */
+    --dark: var(--brand-text-dark);
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; /* Common system font stack */
+    background-color: var(--brand-background-light);
+    color: var(--brand-text-dark);
+    line-height: 1.6;
+    font-size: 16px; /* A good base font size */
+}
+
+/* Navbar */
+.navbar {
+    background-color: #ffffff !important; /* White navbar background for contrast */
+    border-bottom: 1px solid var(--brand-background-subtle);
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+}
+
+.navbar-brand {
+    color: var(--brand-text-dark) !important;
+    font-weight: bold;
+}
+.navbar-brand:hover {
+    color: var(--brand-primary) !important;
+}
+
+.navbar .nav-link {
+    color: var(--brand-text-dark) !important;
+    font-weight: 500; /* Slightly bolder nav links */
+}
+
+.navbar .nav-link:hover,
+.navbar .nav-item.active .nav-link { /* Style for active link if you use it */
+    color: var(--brand-primary) !important;
+}
+
+/* Buttons */
+.btn {
+    border-radius: 0.25rem; /* Softer corners */
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    transition: all 0.2s ease-in-out;
+}
+
+.btn-primary { /* Main action - Dark Blue */
+    background-color: var(--brand-primary);
+    border-color: var(--brand-primary);
+    color: var(--brand-text-light); /* White text */
+}
+.btn-primary:hover, .btn-primary:focus {
+    background-color: #07538a; /* Slightly darker blue */
+    border-color: #07538a;
+    color: var(--brand-text-light);
+    box-shadow: 0 0 0 0.2rem rgba(9, 97, 159, 0.3); /* Subtle focus ring */
+}
+
+.btn-secondary, .btn-success { /* Secondary/Positive action - Pure Orange */
+                               /* Let's call it btn-secondary for now, or create a .btn-accent */
+    background-color: var(--brand-secondary);
+    border-color: var(--brand-secondary);
+    color: var(--brand-text-light); /* White text on orange. Test this for readability. */
+                                  /* If orange is too light for white text, use var(--brand-text-dark) */
+}
+.btn-secondary:hover, .btn-secondary:focus,
+.btn-success:hover, .btn-success:focus {
+    background-color: #d99000; /* Darker orange */
+    border-color: #d99000;
+    color: var(--brand-text-light);
+    box-shadow: 0 0 0 0.2rem rgba(240, 162, 0, 0.3);
+}
+
+/* If you want a light/outline button */
+.btn-outline-primary {
+    color: var(--brand-primary);
+    border-color: var(--brand-primary);
+}
+.btn-outline-primary:hover {
+    background-color: var(--brand-primary);
+    color: var(--brand-text-light);
+}
+
+
+/* Links */
+a {
+    color: var(--brand-primary);
+    text-decoration: none; /* Remove underline by default */
+    transition: color 0.2s ease-in-out;
+}
+a:hover {
+    color: var(--brand-secondary);
+    text-decoration: underline; /* Add underline on hover for clarity */
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6, .display-4 {
+    color: var(--brand-text-dark);
+    font-weight: 500; /* Or bolder like 600 or 700 */
+    margin-bottom: 0.75rem;
+}
+h1, .display-4 {
+    font-weight: 600; /* Make main headings stand out more */
+}
+
+p.lead {
+    color: #495057; /* A standard Bootstrap gray for lead text */
+    font-size: 1.15rem;
+}
+
+/* Cards (for login_user.html/register on homepage) */
+.card {
+    border: 1px solid var(--brand-background-subtle);
+    border-radius: 0.3rem; /* Slightly more rounded */
+}
+.card.shadow { /* Using Bootstrap's shadow class */
+    box-shadow: 0 .125rem .25rem rgba(0,0,0,.075) !important; /* Softer shadow */
+}
+
+.card-title { /* Already covered by h1-h6 but can be more specific if needed */
+    color: var(--brand-text-dark);
+}
+
+/* Forms */
+.form-control {
+    border: 1px solid #ced4da; /* Bootstrap's default, or use var(--brand-background-subtle) */
+    border-radius: 0.25rem;
+}
+.form-control:focus {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 0.2rem rgba(9, 97, 159, 0.25); /* Focus ring matching primary blue */
+}
+
+/* Alerts - Flash Messages */
+.alert {
+    border-radius: 0.25rem;
+    padding: 0.75rem 1.25rem;
+}
+.alert-success {
+    color: #0f5132;
+    background-color: #d1e7dd;
+    border-color: #badbcc;
+}
+.alert-danger {
+    color: #842029;
+    background-color: #f8d7da;
+    border-color: #f5c2c7;
+}
+.alert-warning {
+    color: #664d03;
+    background-color: #fff3cd;
+    border-color: #ffecb5;
+}
+.alert-info { /* Use your brand colors for info */
+    color: var(--brand-text-light);
+    background-color: var(--brand-primary);
+    border-color: var(--brand-primary);
+}
+.alert-info a { /* Make links in info alert visible */
+    color: var(--brand-text-light);
+    font-weight: bold;
+    text-decoration: underline;
+}
+
+
+/* Specific to your landing page example (Option 1) */
+.landing-page-text-column h1.display-4 {
+    margin-bottom: 1.5rem;
+}
+.landing-page-text-column .lead {
+    margin-bottom: 1.5rem;
+}
+.landing-page-form-column .card {
+    /* You might add specific padding or margin here if needed */
+}
+
+/* Utility class for a subtle text color */
+.text-muted-custom {
+    color: #6c757d; /* Bootstrap's standard muted text color */
+}
+
+/* Profile Page Specific Styles */
+.profile-page .profile-card .profile-header-bg {
+    height: 150px; /* Adjust as needed */
+    background-size: cover;
+    background-position: center;
+    border-top-left-radius: calc(0.3rem - 1px); /* Match card's border-radius */
+    border-top-right-radius: calc(0.3rem - 1px);
+}
+
+.profile-page .profile-pic {
+    width: 200px;
+    height: 200px;
+    margin-top: -60px; /* Pulls the avatar up to overlap the header bg */
+    border: 3px solid white; /* White border around avatar */
+    background-color: white; /* Ensures area behind transparent parts of avatar is white */
+}
+
+.profile-page .profile-card .card-title {
+    margin-top: 0;
+    margin-bottom: 0.25rem;
+}
+
+.profile-page .profile-bio {
+    font-size: 0.9rem;
+    color: #555;
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.profile-page .profile-details li {
+    font-size: 0.9rem;
+    margin-bottom: 0.3rem;
+    color: var(--brand-text-dark); /* Use your theme color */
+}
+.profile-page .profile-details li i {
+    width: 20px; /* Align icons */
+}
+
+
+/* Post Card Styling (can be generic if used elsewhere) */
+.post-card .card-body {
+    padding: 1rem;
+}
+
+.post-card .post-actions .btn {
+    font-size: 0.85rem; /* Smaller buttons for actions */
+}
+.post-card .post-actions i {
+    margin-right: 0.25rem;
+}

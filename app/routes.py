@@ -5,7 +5,7 @@ bp = Blueprint('routes', __name__, template_folder='templates')
 
 @bp.route('/')
 def index():
-    return "Welcome to the TSN Platform!"
+    return "Welcome to your TSN platform!"
 
 @bp.route('/users', methods=['GET'])
 def get_users():

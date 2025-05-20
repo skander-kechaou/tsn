@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "security/_macros.html" import render_field_with_errors, render_field %} {# Ensure this macro file exists or render manually #}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h2 class="card-title text-center mb-4">Create Your Account</h2>
+                    <form action="{{ url_for_security('register') }}" method="POST" name="register_user_form" novalidate>
+                        {{ register_user_form.hidden_tag() }} {# CSRF token etc. #}
+
+                        {{ render_field_with_errors(register_user_form.username, class="form-control mb-3", placeholder="Choose a username") }}
+                        {{ render_field_with_errors(register_user_form.first_name, class="form-control mb-3", placeholder="First Name") }}
+                        {{ render_field_with_errors(register_user_form.last_name, class="form-control mb-3", placeholder="Last Name") }}
+                        {{ render_field_with_errors(register_user_form.email, class="form-control mb-3", placeholder="Email Address") }}
+                        {{ render_field_with_errors(register_user_form.phone, class="form-control mb-3", placeholder="Phone Number") }}
+
+                        {# For DateField, you might want specific styling or a date picker JS library later #}
+                        {# Browsers with type="date" support will show a native picker #}
+                        <div class="form-group mb-3">
+                             {{ register_user_form.date_birth.label(class="form-label") }}
+                             {{ register_user_form.date_birth(class="form-control", type="date") }}
+                             {% if register_user_form.date_birth.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in register_user_form.date_birth.errors %}<span>{{ error }}</span>{% endfor %}
+                                </div>
+                             {% endif %}
+                        </div>
+
+                        {# For SelectField (Gender) #}
+                        <div class="form-group mb-3">
+                            {{ register_user_form.gender.label(class="form-label") }}
+                            {{ register_user_form.gender(class="form-select") }} {# form-select is a Bootstrap 5 class, for BS4 use form-control #}
+                            {% if register_user_form.gender.errors %}
+                               <div class="invalid-feedback d-block">
+                                   {% for error in register_user_form.gender.errors %}<span>{{ error }}</span>{% endfor %}
+                               </div>
+                            {% endif %}
+                       </div>
+
+                        {{ render_field_with_errors(register_user_form.password, class="form-control mb-3", placeholder="Create a password") }}
+                        {{ render_field_with_errors(register_user_form.password_confirm, class="form-control mb-3", placeholder="Confirm your password") }}
+
+                        {# Add a general agreement checkbox if needed #}
+{#                        <div class="form-group form-check mb-3">#}
+{#                            {{ register_user_form.agree(class="form-check-input") }}#}
+{#                            {{ register_user_form.agree.label(class="form-check-label") }}#}
+{#                        </div>#}
+
+                        {{ render_field(register_user_form.submit, class="btn btn-primary btn-lg btn-block") }}
+                    </form>
+                    <hr class="my-4">
+                    <p class="text-center text-muted-custom">
+                        Already have an account? <a href="{{ url_for_security('login') }}{% if 'next' in request.args %}?next={{ request.args.next|urlencode }}{% endif %}">Log In</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

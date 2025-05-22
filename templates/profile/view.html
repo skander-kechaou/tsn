@@ -18,25 +18,25 @@
                     <h4 class="card-title">{{ user.first_name }} {{ user.last_name }}</h4>
                     <p class="text-muted-custom">@{{ user.username }}</p>
 
-                    {% if user.bio %}
-                        <p class="profile-bio">{{ user.bio }}</p>
+                    {% if user.biography %}
+                        <p class="profile-bio">{{ user.biography }}</p>
                     {% endif %}
 
                     <hr>
                     {# More details - example #}
                     <ul class="list-unstyled profile-details">
                         {% if user.location %}
-                        <li><i class="fas fa-map-marker-alt mr-2 text-muted-custom"></i> {{ user.location }}</li>
+                            <li><i class="fas fa-map-marker-alt mr-2 text-muted-custom"></i> {{ user.location }}</li>
                         {% endif %}
-                        <li><i class="fas fa-calendar-alt mr-2 text-muted-custom"></i> Joined {{ user.date_joined.strftime('%B %Y') if user.date_joined else 'N/A' }}</li>
-                        {% if user.age %}
-                        <li><i class="fas fa-birthday-cake mr-2 text-muted-custom"></i> {{user.age}} years old</li>
+                            <li><i class="fas fa-calendar-alt mr-2 text-muted-custom"></i> Joined {{ user.date_joined.strftime('%B %Y') if user.date_joined else 'N/A' }}</li>
+                        {% if user.date_birth %}
+                            <li><i class="fas fa-birthday-cake mr-2 text-muted-custom"></i> {{user.date_birth.strftime('%d %B %Y')}}</li>
                         {% endif %}
                         {# Add other details like website, etc. #}
                     </ul>
 
                     {% if current_user.is_authenticated and current_user.id == user.id %}
-                        <a href="{{ url_for('profile.edit_profile') }}" class="btn btn-secondary btn-sm mt-3">Edit Profile</a>
+                        <a href="{{ url_for('profile.edit_profile', username=user.username) }}" class="btn btn-secondary btn-sm mt-3">Edit Profile</a>
                     {% else %}
                         {# Add Follow/Unfollow button or Friend Request button here later #}
                         {# <button class="btn btn-primary btn-sm mt-3">Follow</button> #}

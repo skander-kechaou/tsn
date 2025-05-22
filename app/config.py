@@ -22,6 +22,11 @@ class Config:
     SECURITY_POST_LOGOUT_VIEW = 'main.index'
     SECURITY_POST_REGISTER_VIEW = 'main.dashboard' # Or 'security.login' to force login after register
 
+    # Google Services
+    GOOGLE_OAUTH_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
+    GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
+
+
     # Remove MAIL_SERVER settings if SECURITY_SEND_REGISTER_EMAIL = False
     # MAIL_SERVER = 'smtp.office365.com'
     # MAIL_PORT = 587

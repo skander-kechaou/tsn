@@ -195,7 +195,7 @@ p.lead {
 
 /* Profile Page Specific Styles */
 .profile-page .profile-card .profile-header-bg {
-    height: 150px; /* Adjust as needed */
+    height: 100px; /* Adjust as needed */
     background-size: cover;
     background-position: center;
     border-top-left-radius: calc(0.3rem - 1px); /* Match card's border-radius */
@@ -242,4 +242,79 @@ p.lead {
 }
 .post-card .post-actions i {
     margin-right: 0.25rem;
+}
+
+label[for^="profile_pic_upload"] { /* Target labels whose 'for' attribute starts with 'profile_pic_upload' */
+    position: relative; /* Needed for absolute positioning of the overlay */
+    display: inline-block; /* So it doesn't take full width unless intended */
+    cursor: pointer;
+}
+
+.profile-pic-edit-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent black overlay */
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0; /* Hidden by default */
+    transition: opacity 0.3s ease;
+    border-radius: 50%; /* Match the rounded-circle of the image */
+    font-size: 1rem; /* Adjust as needed */
+    font-weight: bold;
+}
+
+label[for^="profile_pic_upload"]:hover .profile-pic-edit-overlay {
+    opacity: 1; /* Show overlay on hover */
+}
+
+.user-card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    border: 1px solid var(--brand-background-subtle, #e2e2e2); /* Use your subtle gray */
+}
+
+.user-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1) !important; /* Softer, larger shadow on hover */
+}
+
+.user-card-img {
+    width: 100%; /* Make image take full width of card top */
+    height: 200px; /* Set a fixed height, adjust as needed */
+    object-fit: cover; /* This will cover the area, cropping if necessary, good for profile pics */
+    border-top-left-radius: calc(0.25rem - 1px); /* Match card's border-radius */
+    border-top-right-radius: calc(0.25rem - 1px);
+}
+
+.user-card .card-body {
+    padding: 1rem; /* Adjust padding */
+}
+
+.user-card .card-title a {
+    color: var(--brand-text-dark, #143454); /* Use your dark text color */
+    font-weight: 600;
+}
+.user-card .card-title a:hover {
+    color: var(--brand-primary, #09619f); /* Use your primary color for hover */
+    text-decoration: none;
+}
+
+/* Pagination styling (Bootstrap usually handles this well, but you can customize) */
+.pagination .page-item.active .page-link {
+    background-color: var(--brand-primary, #09619f);
+    border-color: var(--brand-primary, #09619f);
+    color: white;
+}
+.pagination .page-link {
+    color: var(--brand-primary, #09619f);
+}
+.pagination .page-link:hover {
+    color: var(--brand-secondary, #f0a200);
+}
+.pagination .page-item.disabled .page-link {
+    color: #6c757d; /* Muted color for disabled links */
 }

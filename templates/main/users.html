@@ -1,18 +1,94 @@
 {% extends "base.html" %}
 
 {% block content %}
-  <h1>All Users</h1>
-  {% if users %}
-    <ul class="list-group">
-      {% for user in users %}
-        <li class="list-group-item">
-          <a href="{{ url_for('profile.view_profile', username=user.username) }}">
-            {{ user.username }}
-          </a>
-        </li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p>No users found.</p>
-  {% endif %}
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-md-8 offset-md-2">
+            {# Search Bar #}
+            <form method="GET" action="{{ url_for('main.users') }}"> {# Point to your users list route #}
+                <div class="input-group">
+                    <input type="text" class="form-control form-control-lg" name="q" placeholder="Search users by name or username..." value="{{ search_query or '' }}">
+                    <div class="input-group-append">
+                        <button class="btn btn-primary btn-lg" type="submit">Search</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if search_query %}
+        <h2 class="mb-3">Search Results for "{{ search_query }}"</h2>
+    {% else %}
+        <h2 class="mb-3">Discover Other Users</h2>
+    {% endif %}
+
+    {% if users_list.items %} {# .items contains the users for the current page #}
+        <div class="row">
+            {% for user_item in users_list.items %}
+            <div class="col-md-6 col-lg-4 col-xl-3 mb-4"> {# Adjust column classes for desired grid #}
+                <div class="card h-100 user-card shadow-sm">
+                    <a href="{{ url_for('profile.view_profile', username=user_item.username) }}" class="text-decoration-none">
+                        <img src="{{ url_for('static', filename=user_item.profile_pic if user_item.profile_pic else 'images/default_profile.jpg') }}"
+                             class="card-img-top user-card-img" alt="{{ user_item.username }}'s profile picture">
+                    </a>
+                    <div class="card-body text-center">
+                        <h5 class="card-title mb-0">
+                            <a href="{{ url_for('profile.view_profile', username=user_item.username) }}" class="text-dark stretched-link">
+                                {{ user_item.username }}
+                            </a>
+                        </h5>
+                        {% if user_item.first_name and user_item.last_name %}
+                            <p class="card-text text-muted small">{{ user_item.first_name }} {{ user_item.last_name }}</p>
+                        {% endif %}
+                        {# Add other info like "Mutual Friends" or "Add Friend" button later #}
+                        {# Example: Add Friend Button (logic not implemented here) #}
+                        {# <a href="#" class="btn btn-sm btn-outline-primary mt-2">Add Friend</a> #}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {# Pagination Controls #}
+        {% if users_list.pages > 1 %}
+        <nav aria-label="User pagination" class="mt-4">
+            <ul class="pagination justify-content-center">
+                {# Previous Page Link #}
+                <li class="page-item {% if not users_list.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('main.users', page=users_list.prev_num, q=search_query) if users_list.has_prev else '#' }}" tabindex="-1" aria-disabled="true">Previous</a>
+                </li>
+
+                {# Page Numbers #}
+                {% for page_num in users_list.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                    {% if page_num %}
+                        {% if users_list.page == page_num %}
+                            <li class="page-item active" aria-current="page">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                        {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('main.users', page=page_num, q=search_query) }}">{{ page_num }}</a>
+                            </li>
+                        {% endif %}
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                {# Next Page Link #}
+                <li class="page-item {% if not users_list.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('main.users', page=users_list.next_num, q=search_query) if users_list.has_next else '#' }}">Next</a>
+                </li>
+            </ul>
+        </nav>
+        {% endif %}
+
+    {% else %}
+        {% if search_query %}
+            <p class="lead">No users found matching your search for "{{ search_query }}".</p>
+        {% else %}
+            <p class="lead">No other users found at the moment.</p>
+        {% endif %}
+    {% endif %}
+</div>
 {% endblock %}

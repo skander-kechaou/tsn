@@ -34,12 +34,13 @@
                     <div class="card-body text-center">
                         <h5 class="card-title mb-0">
                             <a href="{{ url_for('profile.view_profile', username=user_item.username) }}" class="text-dark stretched-link">
-                                {{ user_item.username }}
+                                {% if user_item.first_name and user_item.last_name %}
+                                    {{ user_item.first_name }} {{ user_item.last_name }}
+                                {% endif %}
+
                             </a>
                         </h5>
-                        {% if user_item.first_name and user_item.last_name %}
-                            <p class="card-text text-muted small">{{ user_item.first_name }} {{ user_item.last_name }}</p>
-                        {% endif %}
+                        <p class="card-text text-muted small">@{{ user_item.username }}</p>
                         {# Add other info like "Mutual Friends" or "Add Friend" button later #}
                         {# Example: Add Friend Button (logic not implemented here) #}
                         {# <a href="#" class="btn btn-sm btn-outline-primary mt-2">Add Friend</a> #}

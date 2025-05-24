@@ -1,53 +1,75 @@
 # app/main/routes.py
-import datetime
+import secrets
+import uuid
+from datetime import datetime, date
 import os
 
 from sqlalchemy import or_
 from flask_dance.consumer import oauth_authorized, oauth_error
-from flask_dance.contrib.google import google # The proxy for the current Google session
+from flask_dance.contrib.google import google  # The proxy for the current Google session
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 # from flask_security import Security, SQLAlchemyUserDatastore, UserMixin, RoleMixin
 from flask_login import LoginManager, login_user, logout_user, current_user, login_required
+from flask_security.utils import hash_password  # Or other utils
+from dateutil.parser import parse as parse_date
 
-from ..models import Post, VisibilityEnum, Like, User
+from .forms import PostForm
+from ..models import Post, VisibilityEnum, Like, User, GenderEnum
 from .. import db, security
 
 bp = Blueprint('main', __name__,
                template_folder='templates',
                static_folder='static')
 
+
 @bp.route('/')
 def index():
     return render_template('main/index.html')
 
-@bp.route('/dashboard')
+
+@bp.route('/dashboard', methods=['GET', 'POST'])
 @login_required
 def dashboard():
+    post_form = PostForm()  # Instantiate the form for creating new posts
+
+    if post_form.validate_on_submit():  # This checks if it's a POST request and valid
+        new_post = Post(
+            content=post_form.content.data,
+            visibility=VisibilityEnum(post_form.visibility.data),
+            user_id=current_user,
+            author=current_user
+        )
+        db.session.add(new_post)
+        db.session.commit()
+        flash('Your post has been published!', 'success')
+        return redirect(url_for('main.dashboard'))
+
     # get posts
     posts = Post.query.filter(
         (Post.visibility == VisibilityEnum.PUBLIC) |
         ((Post.visibility == VisibilityEnum.FRIENDS) & (Post.user_id.in_(current_user.friend_ids()))) |
         ((Post.visibility == VisibilityEnum.PRIVATE) & (Post.user_id == current_user.id))
-    ).all()
+    ).order_by(Post.timestamp.desc()).all()
 
-    return render_template('main/dashboard.html', posts=posts)
+    return render_template('main/dashboard.html', posts=posts, post_form=post_form)
 
-@bp.route('/create_post', methods=['GET', 'POST'])
-@login_required
-def create_post():
-    if request.method == 'POST':
-        content = request.form['content']
-        visibility = request.form['visibility']
-        post = Post(
-            user_id=current_user.id,
-            content=content,
-            visibility=VisibilityEnum(visibility)
-        )
-        db.session.add(post)
-        db.session.commit()
-        return redirect(url_for('main.dashboard'))
 
-    return render_template('main/create_post.html')
+# @bp.route('/create_post', methods=['GET', 'POST'])
+# @login_required
+# def create_post():
+#     if request.method == 'POST':
+#         content = request.form['content']
+#         visibility = request.form['visibility']
+#         post = Post(
+#             user_id=current_user.id,
+#             content=content,
+#             visibility=VisibilityEnum(visibility)
+#         )
+#         db.session.add(post)
+#         db.session.commit()
+#         return redirect(url_for('main.dashboard'))
+#
+#     return render_template('main/create_post.html')
 
 
 @bp.route('/post/<int:post_id>/like', methods=['POST'])
@@ -63,15 +85,16 @@ def like_post(post_id):
         db.session.add(like)
 
     db.session.commit()
-    return redirect(url_for('main.dashboard'))
+    return redirect(request.referrer or url_for('main.dashboard'))
+
 
 @bp.route('/users')
 @login_required
 def users():
-    page = request.args.get('page', 1, type=int) # For pagination later
-    search_query = request.args.get('q', '').strip() # Get search query, default to empty string
+    page = request.args.get('page', 1, type=int)  # For pagination later
+    search_query = request.args.get('q', '').strip()  # Get search query, default to empty string
 
-    query = User.query.filter(User.id != current_user.id) # Exclude current user
+    query = User.query.filter(User.id != current_user.id)  # Exclude current user
 
     if search_query:
         # Simple search: username, first name, last name, email (be careful with email privacy)
@@ -80,135 +103,163 @@ def users():
         query = query.filter(
             or_(
                 User.username.ilike(search_term),
-                User.first_name.ilike(search_term), # Ensure you have first_name in User model
-                User.last_name.ilike(search_term)   # Ensure you have last_name in User model
+                User.first_name.ilike(search_term),  # Ensure you have first_name in User model
+                User.last_name.ilike(search_term)  # Ensure you have last_name in User model
             )
         )
 
     # Order users, e.g., by username or registration date
-    users_list = query.order_by(User.username.asc()).paginate(page=page, per_page=12) # Example: 12 users per page
-                                                                                    # Using paginate for pagination
+    users_list = query.order_by(User.username.asc()).paginate(page=page, per_page=12)  # Example: 12 users per page
+    # Using paginate for pagination
 
     return render_template('main/users.html',
                            title="Discover Users",
-                           users_list=users_list, # Pass the pagination object
-                           search_query=search_query) # Pass search query back for pre-filling search bar
+                           users_list=users_list,  # Pass the pagination object
+                           search_query=search_query)  # Pass search query back for pre-filling search bar
 
 
 @oauth_authorized.connect
 def logged_in_with_google(blueprint, token):
-    if blueprint.name != "google":  # Check if it's the Google blueprint signal
+    if blueprint.name != "google":
         return
 
     if not token:
         flash("Failed to log in with Google.", "error")
-        return redirect(url_for("security.login"))  # Or your main page
+        return redirect(url_for("security.login"))
 
-    # Get user info from Google using the token
+    google_user_info = None
+    people_api_data = None  # For data from People API if needed
+
     try:
-        # 'google' is the proxy object from flask_dance.contrib.google
-        resp = google.get("/oauth2/v2/userinfo")  # Common endpoint for user info
-        assert resp.ok, resp.text  # Ensure the request was successful
-        google_user_info = resp.json()
-
+        # Get basic user info
+        resp_userinfo = blueprint.session.get("/oauth2/v2/userinfo")
+        resp_userinfo.raise_for_status()
+        google_user_info = resp_userinfo.json()
         email = google_user_info.get("email")
-        google_id = google_user_info.get("id")  # Google's unique user ID
-        first_name = google_user_info.get("given_name")
-        last_name = google_user_info.get("family_name")
-        profile_pic_url = google_user_info.get("picture")  # URL to Google profile picture
+
+        # To get richer profile data like birthday, gender, phone, you often need the People API
+        # The 'google_id' is 'me' in People API context for the authenticated user
+        google_person_id = google_user_info.get("sub")  # 'sub' is standard OIDC subject identifier (Google ID)
+
+        if google_person_id:
+            # Request specific fields: birthdays, genders, phoneNumbers
+            # Note: You might get multiple entries for some of these (e.g., multiple phone numbers)
+            # You'll need to pick the primary one or handle appropriately.
+            person_fields = "names,emailAddresses,birthdays,genders,phoneNumbers"  # Add other fields as needed
+            resp_people = blueprint.session.get(
+                f"https://people.googleapis.com/v1/people/{google_person_id}?personFields={person_fields}"
+            )
+            if resp_people.ok:  # Check if the request was successful
+                people_api_data = resp_people.json()
+            else:
+                current_app.logger.warning(
+                    f"Failed to get extended info from People API: {resp_people.status_code} - {resp_people.text}")
 
     except Exception as e:
-        current_app.logger.error(f"Could not fetch user info from Google: {e}")
+        current_app.logger.error(f"Could not fetch user info from Google/People API: {e}", exc_info=True)
         flash("Could not fetch user info from Google. Please try again.", "error")
         return redirect(url_for("security.login"))
 
-    if not email:
+    if not email:  # Email should come from userinfo
         flash("Email not provided by Google. Cannot log in.", "error")
         return redirect(url_for("security.login"))
 
-    # --- Query your database for an existing user ---
-    # Option 1: User identified by email
     user = User.query.filter_by(email=email).first()
 
-    # Option 2: User identified by Google ID (more robust if email can change or not primary)
-    # You would need to add a 'google_id' field to your User model
-    # user = User.query.filter_by(google_id=google_id).first()
-    # if not user and email: # Fallback to email if google_id not found but email exists
-    #     user = User.query.filter_by(email=email).first()
-    #     if user and not user.google_id: # Link account if found by email and google_id not set
-    #         user.google_id = google_id
-    #         db.session.commit()
-
-    if user:
-        # User exists, log them in
-        # If you added google_id and they logged in via email before:
-        # if not user.google_id:
-        #     user.google_id = google_id
-        #     db.session.commit()
-        pass  # User already exists
-    else:
-        # User does not exist, create a new user
-        # Ensure your User model can handle this creation.
-        # Password can be set to None or a long random string if they only use OAuth.
-        try:
-            # A simple username generation, ensure it's unique or adapt
-            username_base = email.split('@')[0]
-            username_candidate = username_base
-            counter = 1
-            while User.query.filter_by(username=username_candidate).first():
-                username_candidate = f"{username_base}_{counter}"
-                counter += 1
-
-            # Create a placeholder password for users created via OAuth
-            # This password should not be guessable or usable for direct login
-            # unless you implement a "set password" feature later.
-            # Flask-Security's datastore.create_user will hash it.
-            placeholder_password = security.utils.hash_password(os.urandom(24).hex())
-
-            user_data_for_creation = {
-                'email': email,
-                'username': username_candidate,
-                'password': placeholder_password,  # Will be hashed by create_user
-                'first_name': first_name or "",  # Provide default if None
-                'last_name': last_name or "",  # Provide default if None
-                'active': True,  # Or False if you want to implement an extra step
-                'confirmed_at': datetime.utcnow(),  # Auto-confirm OAuth users
-                # 'google_id': google_id, # If you have this field
-                # 'profile_pic': profile_pic_url, # You might want to download and store it locally
-                # or just store the Google URL
-            }
-            # Populate other required fields for your User model
-            # For Enum fields like gender, you might need a default or logic to derive it
-            # user_data_for_creation['gender'] = GenderEnum.PREFER_NOT_TO_SAY # Example default
-
-            # Use Flask-Security's datastore to create the user
-            # This ensures fs_uniquifier and other FS fields are handled
-            user = security.datastore.create_user(**user_data_for_creation)
-            # db.session.commit() # create_user usually commits
-
-            # Optionally, assign a default role
-            # default_role = security.datastore.find_or_create_role(name='user')
-            # security.datastore.add_role_to_user(user, default_role)
-            # db.session.commit()
-
-            flash("Your account has been created using Google.", "success")
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error creating new Google user: {e}", exc_info=True)
-            flash(f"An error occurred while creating your account: {str(e)}", "error")
-            return redirect(url_for("security.register"))  # Or security.login
-
-    # Log the user in using Flask-Login
     if user:
         login_user(user)
-        flash("Successfully logged in with Google!", "success")
-        # Redirect to a 'next' URL if it exists, otherwise to dashboard
-        next_url = request.args.get('next') or url_for('main.dashboard')
-        return redirect(next_url)
+        flash(f"Welcome back, {user.username or user.email}!", "success")
+        return redirect(url_for('main.dashboard'))
     else:
-        # This case should ideally not be reached if user creation succeeded or user existed
-        flash("Login failed after Google authentication.", "error")
-        return redirect(url_for("security.login"))
+        # --- NEW USER: PREPARE DATA FOR REGISTRATION FORM / DIRECT CREATION ---
+        first_name = google_user_info.get("given_name")
+        last_name = google_user_info.get("family_name")
+
+        # Username generation (same as before)
+        email_prefix = email.split('@')[0]
+        base_username = (first_name or email_prefix).lower().replace(" ", "_")
+        base_username = "".join(c if c.isalnum() or c == '_' else '' for c in base_username)
+        if not base_username: base_username = f"user_{str(uuid.uuid4())[:6]}"
+        temp_username = base_username
+        counter = 0
+        while User.query.filter_by(username=temp_username).first():
+            counter += 1
+            temp_username = f"{base_username}_{counter}"
+        generated_username = temp_username
+
+        # Extract birthday
+        user_dob = date(1900, 1, 1)  # Default placeholder
+        if people_api_data and people_api_data.get("birthdays"):
+            for bday in people_api_data["birthdays"]:
+                if bday.get("date") and bday.get("date").get("year") and bday.get("date").get("month") and bday.get(
+                        "date").get("day"):
+                    try:
+                        user_dob = date(bday["date"]["year"], bday["date"]["month"], bday["date"]["day"])
+                        break  # Take the first valid one
+                    except ValueError:
+                        current_app.logger.warning(f"Invalid birthday format from Google: {bday['date']}")
+
+        # Extract gender
+        user_gender = GenderEnum.PREFER_NOT_TO_SAY  # Default
+        if people_api_data and people_api_data.get("genders"):
+            for g in people_api_data["genders"]:
+                google_gender_value = g.get("value", "").lower()
+                if google_gender_value == "male":
+                    user_gender = GenderEnum.MALE
+                    break
+                elif google_gender_value == "female":
+                    user_gender = GenderEnum.FEMALE
+                    break
+                elif google_gender_value == "other":  # Or map as needed
+                    user_gender = GenderEnum.OTHER
+                    break
+
+        # Extract phone number (take the first canonical one if available)
+        user_phone = None  # Keep as None if not found, relies on User.phone being nullable
+        if people_api_data and people_api_data.get("phoneNumbers"):
+            for pn in people_api_data["phoneNumbers"]:
+                if pn.get("canonicalForm") or pn.get("value"):  # Prefer canonicalForm
+                    user_phone = pn.get("canonicalForm") or pn.get("value")
+                    # Check if phone number already exists if it needs to be unique
+                    if User.query.filter_by(phone=user_phone).first():
+                        current_app.logger.warning(
+                            f"Phone number {user_phone} from Google already exists. Not setting for new user {email}.")
+                        user_phone = None  # Don't use it if it's taken and must be unique
+                    break
+
+        # Ensure all non-nullable fields in your User model are covered here
+        user_data = {
+            'email': email,
+            'username': generated_username,
+            'password': secrets.token_urlsafe(24),
+            'first_name': first_name or "User",
+            'last_name': last_name or "",
+            'active': True,
+            'confirmed_at': datetime.utcnow(),
+            'fs_uniquifier': str(uuid.uuid4()),
+            'date_birth': user_dob,  # From Google or placeholder
+            'gender': user_gender,  # From Google or placeholder
+            'phone': user_phone,  # From Google (will be None if not found/taken & model is nullable)
+            # If User.phone is NOT nullable, you MUST provide a placeholder here
+            # if user_phone is None.
+        }
+
+        # If phone is NOT nullable and no phone was found:
+        if not user_data.get('phone') and not User.phone.nullable:
+            user_data['phone'] = f"OAUTH_NO_PHONE_{str(uuid.uuid4())[:8]}"  # Placeholder if phone is required
+
+        try:
+            new_user = security.datastore.create_user(**user_data)
+            # ... (assign roles, commit, login_user, flash, redirect) ...
+            security.datastore.commit()
+            login_user(new_user)
+            flash("Account created via Google!", "success")
+            return redirect(url_for("main.dashboard"))
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error creating user {email} after Google (People API): {e}", exc_info=True)
+            flash("An error occurred creating your account. Please try manual registration.", "danger")
+            return redirect(url_for("security.register"))
 
 
 # Optional: Handle OAuth errors

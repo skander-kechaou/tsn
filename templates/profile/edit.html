@@ -107,7 +107,6 @@
 
 {# Add JavaScript at the end of the block or in a separate JS file linked in base.html #}
 {% block scripts %}
-{{ super() }} {# Include scripts from base.html if any #}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const profilePicUploadInput = document.getElementById('profilePicUploadInput');

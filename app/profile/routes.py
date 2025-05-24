@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import current_user, login_required
 from .. import db
-from ..models import User, Post, VisibilityEnum
+from ..models import User, Post, VisibilityEnum, Like, Share
 from .forms import EditProfileForm  # Create a WTForm for profile editing
 import os
 
@@ -41,18 +41,71 @@ def save_picture(form_picture):
 
 
 @bp.route('/profile/<username>')
+@bp.route('/profile/<username>/<view_type>')
 @login_required
-def view_profile(username):
-    profile_user = User.query.filter_by(username=username).first_or_404()
-    # get posts
-    user_posts = profile_user.posts.order_by(Post.timestamp.desc()).all()
+def view_profile(username, view_type=None):
+    user = User.query.filter_by(username=username).first_or_404()
+
+    # Determine which tab/view is active
+    if view_type not in ['posts', 'likes', 'shares']:
+        view_type = 'posts'  # Default to posts view
+
+    items_to_display = []
+    pagination_obj = None  # For potential pagination within tabs later
+
+    items_per_page = current_app.config.get('PROFILE_ITEMS_PER_PAGE', 10)  # Configurable
+    page = request.args.get('page', 1, type=int)
+
+    if view_type == 'posts':
+        # Fetch posts authored by this user
+        # Apply visibility rules if viewing someone else's profile
+        posts_query = Post.query.filter_by(author=user)
+        if user != current_user:  # If viewing another user's profile
+            # Only show public posts, or friends' posts if they are friends
+            # This logic needs to be robust based on your friendship model
+            is_friend = current_user.is_authenticated and user in current_user.friends
+            if is_friend:
+                posts_query = posts_query.filter(
+                    (Post.visibility == VisibilityEnum.PUBLIC) |
+                    (Post.visibility == VisibilityEnum.FRIENDS)
+                )
+            else:
+                posts_query = posts_query.filter(Post.visibility == VisibilityEnum.PUBLIC)
+
+        posts_query = posts_query.order_by(Post.timestamp.desc())
+        pagination_obj = posts_query.paginate(page=page, per_page=items_per_page, error_out=False)
+        items_to_display = pagination_obj.items
+        active_tab = 'posts'
+
+    elif view_type == 'likes':
+        # Fetch posts/items liked by this user
+        # This requires knowing what the user liked (posts, comments, shares)
+        # For simplicity, let's assume we only show liked POSTS for now.
+        # You'd need a more complex query or separate tabs if you want to show liked comments/shares.
+
+        # Get Like objects where user_id is the profile user's ID and post_id is not null
+        likes_query = Like.query.filter_by(user_id=user.id) \
+            .filter(Like.post_id != None) \
+            .order_by(Like.timestamp.desc())
+
+        pagination_obj = likes_query.paginate(page=page, per_page=items_per_page, error_out=False)
+        # items_to_display will be Like objects. The template will need to access like.liked_post_object
+        items_to_display = pagination_obj.items
+        active_tab = 'likes'
+
+    elif view_type == 'shares':
+        # Fetch posts shared by this user
+        shares_query = Share.query.filter_by(author=user).order_by(Share.timestamp.desc())
+        pagination_obj = shares_query.paginate(page=page, per_page=items_per_page, error_out=False)
+        # items_to_display will be Share objects. The template will need to access share.original_post
+        items_to_display = pagination_obj.items
+        active_tab = 'shares'
 
     return render_template('profile/view.html',
-                           user=profile_user,
-                           posts=user_posts,
-                           title=f"{{profile_user.first_name}} {{profile_user.last_name}}'s Profile}}")
-
-
+                           profile_user=user,
+                           items=items_to_display,  # Posts, Likes, or Shares
+                           active_tab=active_tab,  # To highlight the active tab
+                           pagination=pagination_obj)  # For pagination controls within t
 
 @bp.route('/profile/<username>/edit', methods=['GET', 'POST'])
 @login_required

@@ -9,6 +9,8 @@ from .config import Config
 from .auth.forms import ExtendedRegisterForm # Path: app/security/forms.py
 from flask_dance.contrib.google import make_google_blueprint
 
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
 def create_app(config_class=Config):
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     template_dir = os.path.join(project_root, 'templates')
@@ -65,33 +67,24 @@ def create_app(config_class=Config):
         f"2. app.config['SECURITY_REGISTER_FORM'] (class object from app.config): {app.config.get('SECURITY_REGISTER_FORM')}")
 
     # ---- Flask-Dance Google Blueprint Setup ----
-    # For development on HTTP, you might need this if Google complains about insecure transport
-    # Only use this in development!
-    if app.debug:  # Or check FLASK_ENV explicitly
-        os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
-
     google_bp = make_google_blueprint(
         client_id=app.config["GOOGLE_OAUTH_CLIENT_ID"],
         client_secret=app.config["GOOGLE_OAUTH_CLIENT_SECRET"],
         # Scopes define what information you're asking Google for
         scope=[
-            "openid",  # Standard OpenID Connect scope
-            "https://www.googleapis.com/auth/userinfo.email",  # To get user's email
-            "https://www.googleapis.com/auth/userinfo.profile"  # To get name, profile picture, etc.
+            "openid",  # Standard for OpenID Connect
+            "https://www.googleapis.com/auth/userinfo.email",  # For email
+            "https://www.googleapis.com/auth/userinfo.profile",  # For name, profile pic
+            "https://www.googleapis.com/auth/user.birthday.read",  # For birthday
+            "https://www.googleapis.com/auth/user.gender.read",  # For gender (check current availability)
+            "https://www.googleapis.com/auth/user.phonenumbers.read" # For phone (requires People API enabled & verification)
         ],
         # This is where Google redirects AFTER successful auth.
-        # It must match one of the "Authorized redirect URIs" in your Google Cloud Console.
-        # The default redirect endpoint within Flask-Dance is usually /google/authorized
-        # So if blueprint is at /login, full path is /login/google/authorized
-        # We'll handle this with a signal or a dedicated route later.
-        # For now, let's set a placeholder or let it use its default.
-        # If you want to redirect to a custom route after Google auth:
         # redirect_to="auth.handle_google_auth", # 'auth' is your blueprint, 'handle_google_auth' is your route
     )
     app.register_blueprint(google_bp, url_prefix="/login")  # Makes routes like /login/google
 
     # Try to access the form mapping directly if it exists
-    # Flask-Security usually has a way to get the form class for a given view name.
     # The 'forms' attribute might be a dictionary or a FormRegistry like object
     actual_register_form_class = None
     if hasattr(security, 'forms'):  # 'forms' is a common attribute name for the registry

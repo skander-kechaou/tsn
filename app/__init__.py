@@ -111,4 +111,7 @@ def create_app(config_class=Config):
     from .connections.routes import bp as connections_bp
     app.register_blueprint(connections_bp)
 
+    from .sockets import init_socketio_events
+    init_socketio_events(socketio)
+
     return app

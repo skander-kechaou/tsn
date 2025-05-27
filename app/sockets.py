@@ -8,8 +8,17 @@ def init_socketio_events(socketio):
     def handle_disconnect():
         print("Client disconnected")
 
-    @socketio.on('send_message')
+    # @socketio.on('send_message')
+    # def handle_send_message(data):
+    #     # Broadcast the received message to all connected clients
+    #     message = data.get('message')
+    #     socketio.emit('receive_message', {'message': message})
+
     def handle_send_message(data):
-        # Broadcast the received message to all connected clients
+        # Now we correctly expect a dictionary
+        username = data.get('username', 'Anonymous')
         message = data.get('message')
-        socketio.emit('receive_message', {'message': message})
+        print(f"Message from {username}: {message}")
+
+        # Broadcast it under the correct event
+        socketio.emit('chat', {'username': username, 'message': message})

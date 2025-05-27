@@ -444,3 +444,8 @@ def add_comment(post_id):
             flash('Could not post comment.', 'danger')
 
     return redirect(request.referrer or url_for('main.dashboard') + f"#post-{post.id}")
+
+
+@bp.route('/message')
+def message():
+    return render_template('main/message.html')

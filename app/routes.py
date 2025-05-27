@@ -16,3 +16,4 @@ def get_users():
 @login_required
 def dashboard():
     return "User Dashboard"
+

@@ -7,85 +7,29 @@ import os
 from sqlalchemy import or_
 from flask_dance.consumer import oauth_authorized, oauth_error
 from flask_dance.contrib.google import google  # The proxy for the current Google session
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, send_from_directory, abort
 # from flask_security import Security, SQLAlchemyUserDatastore, UserMixin, RoleMixin
 from flask_login import LoginManager, login_user, logout_user, current_user, login_required
 from flask_security.utils import hash_password  # Or other utils
 from dateutil.parser import parse as parse_date
+from werkzeug.utils import secure_filename
 
-from .forms import PostForm
-from ..models import Post, VisibilityEnum, Like, User, GenderEnum
+from .forms import PostForm, EditPostForm, CommentForm
+from ..models import Post, VisibilityEnum, Like, User, GenderEnum, Comment
 from .. import db, security
 
 bp = Blueprint('main', __name__,
                template_folder='templates',
                static_folder='static')
 
+ALLOWED_IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif'}
+ALLOWED_VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
+ALLOWED_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS.union(ALLOWED_VIDEO_EXTENSIONS)
+
 
 @bp.route('/')
 def index():
     return render_template('main/index.html')
-
-
-@bp.route('/dashboard', methods=['GET', 'POST'])
-@login_required
-def dashboard():
-    post_form = PostForm()  # Instantiate the form for creating new posts
-
-    if post_form.validate_on_submit():  # This checks if it's a POST request and valid
-        new_post = Post(
-            content=post_form.content.data,
-            visibility=VisibilityEnum(post_form.visibility.data),
-            user_id=current_user,
-            author=current_user
-        )
-        db.session.add(new_post)
-        db.session.commit()
-        flash('Your post has been published!', 'success')
-        return redirect(url_for('main.dashboard'))
-
-    # get posts
-    posts = Post.query.filter(
-        (Post.visibility == VisibilityEnum.PUBLIC) |
-        ((Post.visibility == VisibilityEnum.FRIENDS) & (Post.user_id.in_(current_user.friend_ids()))) |
-        ((Post.visibility == VisibilityEnum.PRIVATE) & (Post.user_id == current_user.id))
-    ).order_by(Post.timestamp.desc()).all()
-
-    return render_template('main/dashboard.html', posts=posts, post_form=post_form)
-
-
-# @bp.route('/create_post', methods=['GET', 'POST'])
-# @login_required
-# def create_post():
-#     if request.method == 'POST':
-#         content = request.form['content']
-#         visibility = request.form['visibility']
-#         post = Post(
-#             user_id=current_user.id,
-#             content=content,
-#             visibility=VisibilityEnum(visibility)
-#         )
-#         db.session.add(post)
-#         db.session.commit()
-#         return redirect(url_for('main.dashboard'))
-#
-#     return render_template('main/create_post.html')
-
-
-@bp.route('/post/<int:post_id>/like', methods=['POST'])
-@login_required
-def like_post(post_id):
-    post = Post.query.get_or_404(post_id)
-    existing_like = Like.query.filter_by(user_id=current_user.id, post_id=post.id).first()
-
-    if existing_like:
-        db.session.delete(existing_like)
-    else:
-        like = Like(user_id=current_user.id, post_id=post.id)
-        db.session.add(like)
-
-    db.session.commit()
-    return redirect(request.referrer or url_for('main.dashboard'))
 
 
 @bp.route('/users')
@@ -273,3 +217,230 @@ def google_oauth_error(blueprint, error, error_description=None, error_uri=None)
 # If this code is in app/__init__.py, it should be fine.
 # If it's in a separate file (e.g., app/oauth_handlers.py), import that file in app/__init__.py
 # so the @oauth_authorized.connect decorator runs.
+
+
+def save_post_media(form_media_file):
+    if not form_media_file or not form_media_file.filename:
+        return None  # No file uploaded
+
+    original_filename = secure_filename(form_media_file.filename)
+    _, f_ext = os.path.splitext(original_filename)
+
+    if f_ext.lower() not in ALLOWED_EXTENSIONS:
+        flash(f'Invalid file type: {f_ext}. Allowed types are images (png, jpg, gif) or videos (mp4, mov, avi, etc.).',
+              'danger')
+        current_app.logger.warning(f"Attempt to upload invalid file type: {original_filename}")
+        return None
+
+    random_hex = secrets.token_hex(8)
+    unique_filename = random_hex + f_ext
+
+    # Saving to instance folder is recommended for user uploads
+    upload_subdir_instance = 'post_media'  # e.g., instance/post_media/
+    full_upload_folder_path = os.path.join(current_app.instance_path, upload_subdir_instance)
+
+    # Path to store in DB (relative to the 'instance' uploads concept)
+    # e.g., "post_media/uniquefilename.jpg"
+    relative_db_path = os.path.join(upload_subdir_instance, unique_filename).replace("\\", "/")
+
+    os.makedirs(full_upload_folder_path, exist_ok=True)
+    file_save_path = os.path.join(full_upload_folder_path, unique_filename)
+
+    try:
+        form_media_file.save(file_save_path)
+        current_app.logger.info(f"Successfully saved media: {unique_filename} to {file_save_path}")
+        return relative_db_path  # Return only the path
+    except Exception as e:
+        current_app.logger.error(f"Error saving media file {unique_filename}: {e}", exc_info=True)
+        flash('An error occurred while saving your media.', 'danger')
+        return None
+
+
+@bp.route('/dashboard', methods=['GET', 'POST'])
+@login_required
+def dashboard():
+    post_form = PostForm()
+
+    if post_form.validate_on_submit():  # This will now validate media_upload if it has validators
+        current_app.logger.info("--- Dashboard POST request, form validated ---")
+        media_path_for_db = None
+
+        uploaded_file = post_form.media_upload.data  # Access file via the form field
+        current_app.logger.info(f"post_form.media_upload.data: {uploaded_file}")  # Check if it's a FileStorage
+
+        if uploaded_file and uploaded_file.filename:  # Check FileStorage object
+            current_app.logger.info(f"FileField data present: {uploaded_file.filename}")
+            saved_path = save_post_media(uploaded_file)  # Your existing save function
+            if saved_path:
+                media_path_for_db = saved_path
+                current_app.logger.info(f"Media path for DB: {media_path_for_db}")
+            else:
+                current_app.logger.warning("save_post_media returned None. Post will be created without media.")
+                # No need to redirect here, let the post creation continue without media
+                # or add a specific flash message if media upload was attempted but failed.
+        else:
+            current_app.logger.info("No file data provided in post_form.media_upload.data")
+
+        actual_user_object = current_user._get_current_object()
+        new_post = Post(
+            content=post_form.content.data,
+            visibility=VisibilityEnum(post_form.visibility.data),
+            author=actual_user_object,
+            media=media_path_for_db  # Will be None if no file or save failed
+        )
+        db.session.add(new_post)
+        try:
+            db.session.commit()
+            current_app.logger.info(
+                f"Post committed to DB. Media path: {media_path_for_db if media_path_for_db else 'N/A'}")
+            flash('Your post has been published!', 'success')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error committing post to DB: {e}", exc_info=True)
+            flash('Error publishing post.', 'danger')
+
+        return redirect(url_for('main.dashboard'))
+    elif request.method == 'POST':  # Form submitted but validate_on_submit() was false
+        flash('Please correct the errors below.', 'danger')
+        current_app.logger.warning(f"Post form validation failed. Errors: {post_form.errors}")
+
+    page = request.args.get('page', 1, type=int)
+    actual_current_user = current_user._get_current_object()
+
+    conditions = []
+    conditions.append(Post.visibility == VisibilityEnum.PUBLIC)
+
+    if actual_current_user.is_authenticated:
+        friend_ids = actual_current_user.friend_ids()
+        if friend_ids:
+            conditions.append(
+                (Post.visibility == VisibilityEnum.FRIENDS) & (Post.user_id.in_(friend_ids))
+            )
+        conditions.append(
+            (Post.visibility == VisibilityEnum.PRIVATE) & (Post.user_id == actual_current_user.id)
+        )
+
+    posts_query = Post.query.filter(or_(*conditions)) \
+        .order_by(Post.timestamp.desc())
+
+    posts_per_page = current_app.config.get('POSTS_PER_PAGE', 10)
+    posts_pagination = posts_query.paginate(page=page, per_page=posts_per_page, error_out=False)
+
+    # THIS IS THE LIST OF POSTS PASSED TO THE TEMPLATE
+    posts_on_page = posts_pagination.items
+
+    return render_template('main/dashboard.html',
+                           title='Dashboard',
+                           post_form=post_form,
+                           posts=posts_on_page,  # <-- This is 'posts' in the template
+                           pagination=posts_pagination)
+
+
+@bp.route('/uploads/post_media/<path:filename>')  # URL pattern
+# @login_required # Consider if media should always be public or require login/visibility checks
+def uploaded_post_media(filename):  # Function name becomes part of the endpoint if not specified
+    # This path MUST match where your save_post_media function saves the files.
+    # If save_post_media saves to 'instance/post_media':
+    media_directory = os.path.join(current_app.instance_path, 'post_media')
+
+    current_app.logger.info(f"Attempting to serve: {filename} from {media_directory}")
+    try:
+        return send_from_directory(media_directory, filename, as_attachment=False)
+    except FileNotFoundError:
+        current_app.logger.error(f"File not found: {filename} in {media_directory}")
+        abort(404)
+    except Exception as e:
+        current_app.logger.error(f"Error serving file {filename}: {e}", exc_info=True)
+        abort(500)  # Or a more specific error
+
+@bp.route('/post/<int:post_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    if post.author != current_user: # Or current_user._get_current_object() for strict comparison
+        abort(403)  # Forbidden if not the author
+
+    form = EditPostForm(obj=post) # Pre-populate form with existing post data
+
+    if form.validate_on_submit():
+        post.content = form.content.data
+        post.visibility = VisibilityEnum(form.visibility.data) # Convert string back to Enum
+        if form.new_media.data:
+            # Delete old media if it exists and is being replaced
+            new_media_path = save_post_media(form.new_media.data)
+            if new_media_path:
+                post.media = new_media_path
+        db.session.commit()
+        flash('Your post has been updated!', 'success')
+        return redirect(url_for('main.dashboard'))
+    elif request.method == 'GET':
+        form.content.data = post.content
+        form.visibility.data = post.visibility.value
+
+    return render_template('main/edit_post.html', title='Edit Post', form=form, post=post)
+
+
+@bp.route('/post/<int:post_id>/delete', methods=['POST']) # Strictly POST for deletion
+@login_required
+def delete_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    if post.author != current_user:
+        abort(403)
+
+    # deleting associated media from the filesystem
+    if post.media:
+        try:
+            if post.media.startswith('post_media/'):
+                media_filename = post.media.split('/')[-1] # Get just the filename
+                media_path = os.path.join(current_app.instance_path, 'post_media', media_filename)
+                if os.path.exists(media_path):
+                    os.remove(media_path)
+                    current_app.logger.info(f"Deleted media file: {media_path}")
+        except Exception as e:
+            current_app.logger.error(f"Error deleting media file for post {post.id}: {e}")
+
+    db.session.delete(post)
+    db.session.commit()
+    flash('Your post has been deleted.', 'success')
+    return redirect(url_for('main.dashboard'))
+
+@bp.route('/post/<int:post_id>/like', methods=['POST'])
+@login_required
+def like_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    existing_like = Like.query.filter_by(user_id=current_user.id, post_id=post.id).first()
+
+    if existing_like:
+        db.session.delete(existing_like)
+    else:
+        like = Like(user_id=current_user.id, post_id=post.id)
+        db.session.add(like)
+
+    db.session.commit()
+    return redirect(request.referrer or url_for('main.dashboard'))
+
+@bp.route('/post/<int:post_id>/comment', methods=['POST'])
+@login_required
+def add_comment(post_id):
+    post = Post.query.get_or_404(post_id)
+    form = CommentForm()
+
+    if form.validate_on_submit():
+        comment_content = form.comment_text.data
+        new_comment = Comment(
+            content=comment_content,
+            user_id=current_user.id, # Or current_user._get_current_object().id
+            post_id=post.id
+        )
+        db.session.add(new_comment)
+        db.session.commit()
+        flash('Your comment has been added.', 'success')
+    else:
+        if form.errors:
+            for field, errors in form.errors.items():
+                for error in errors:
+                    flash(f"Error in {getattr(form, field).label.text}: {error}", 'danger')
+        else:
+            flash('Could not post comment.', 'danger')
+
+    return redirect(request.referrer or url_for('main.dashboard') + f"#post-{post.id}")

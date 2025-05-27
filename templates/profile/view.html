@@ -10,6 +10,8 @@
                     {# Profile Picture Column #}
                     <div class="col-md-3 text-center mb-3 mb-md-0">
                         <img src="
+
+
                                 {{ url_for('static', filename=profile_user.profile_pic) if profile_user.profile_pic.startswith('images/') else url_for('main.uploaded_profile_pic', filename=profile_user.profile_pic.split('/')[-1]) if profile_user.profile_pic else url_for('static', filename='images/default_profile.jpg') }}"
                              alt="{{ profile_user.username }}'s profile picture"
                              class="img-fluid rounded-circle profile-pic-large">
@@ -29,28 +31,38 @@
                                            class="btn btn-outline-secondary btn-sm"><i
                                                 class="fas fa-pencil-alt fa-fw"></i> Edit Profile</a>
                                     {% else %}
-                                        {# --- Friend Button Placeholder --- #}
-                                        {# To implement:
-                                       1. Add `is_friend(other_user)` method to User model.
-                                       2. Add routes for `add_friend`, `unfriend_user`.
-                                       3. Uncomment and adapt the form logic below.
-                                    #}
-                                        {# {% set are_friends = current_user.is_friend(profile_user) %}
-                                    {% if are_friends %}
-                                        <form action="{{ url_for('profile.unfriend_user', user_id=profile_user.id) }}" method="POST" class="d-inline-block">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                            <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-user-minus fa-fw"></i> Unfriend</button>
-                                        </form>
-                                    {% else %}
-                                        <form action="{{ url_for('profile.add_friend', user_id=profile_user.id) }}" method="POST" class="d-inline-block">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                            <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-user-plus fa-fw"></i> Add Friend</button>
-                                        </form>
-                                    {% endif %} #}
-                                        <button class="btn btn-primary btn-sm disabled"><i
-                                                class="fas fa-user-plus fa-fw"></i> Add Friend
-                                        </button> {# Placeholder button #}
-                                        {# <a href="#" class="btn btn-outline-primary btn-sm ml-2"><i class="fas fa-envelope fa-fw"></i> Message (Soon)</a> #}
+                                        <div class="profile-actions mt-2 mt-md-0">
+                                            {% if current_user.is_authenticated %}
+                                                {% if current_user.id == profile_user.id %}
+                                                    <a href="{{ url_for('profile.edit_profile', username=profile_user.username) }}"
+                                                       class="btn btn-outline-secondary btn-sm"><i
+                                                            class="fas fa-pencil-alt fa-fw"></i> Edit Profile</a>
+                                                {% else %}
+                                                    {# Use the is_friend method from your User model #}
+                                                    {% if current_user.is_friend(profile_user) %}
+                                                        <form action="{{ url_for('profile.unfriend_route', username=profile_user.username) }}"
+                                                              method="POST" class="d-inline-block">
+                                                            <input type="hidden" name="csrf_token"
+                                                                   value="{{ csrf_token() }}">
+                                                            <button type="submit" class="btn btn-secondary btn-sm"><i
+                                                                    class="fas fa-user-minus fa-fw"></i> Unfriend
+                                                            </button>
+                                                        </form>
+                                                    {% else %}
+                                                        <form action="{{ url_for('profile.add_friend_route', username=profile_user.username) }}"
+                                                              method="POST" class="d-inline-block">
+                                                            <input type="hidden" name="csrf_token"
+                                                                   value="{{ csrf_token() }}">
+                                                            <button type="submit" class="btn btn-primary btn-sm"><i
+                                                                    class="fas fa-user-plus fa-fw"></i> Add Friend
+                                                            </button>
+                                                        </form>
+                                                    {% endif %}
+                                                    <a href="#" class="btn btn-outline-primary btn-sm ml-2"><i
+                                                            class="fas fa-envelope fa-fw"></i> Message</a>
+                                                {% endif %}
+                                            {% endif %}
+                                        </div>
                                     {% endif %}
                                 {% endif %}
                             </div>
@@ -89,12 +101,17 @@
                         <strong class="d-block">{{ profile_user.posts.count() }}</strong>
                         <span class="text-muted">Posts</span>
                     </a>
-                    <div class="stat-item text-decoration-none"> {# Placeholder for Friends Count #}
-                        {# To implement: User.friends relationship or method #}
-                        <strong class="d-block">#</strong> {# <--- Placeholder #}
-                        {# <strong class="d-block">{{ profile_user.friends.count() if hasattr(profile_user, 'friends') else 'N/A' }}</strong> #}
+                    <a href="{{ url_for('profile.view_friends', username=profile_user.username) }}"
+                       class="stat-item text-decoration-none">
+                        <strong class="d-block">
+                            {% if profile_user.friends %}
+                                {{ profile_user.friend_count() }}
+                            {% else %}
+                                0
+                            {% endif %}
+                        </strong>
                         <span class="text-muted">Friends</span>
-                    </div>
+                    </a>
                     <a href="{{ url_for('profile.view_profile', username=profile_user.username, view_type='likes') }}"
                        class="stat-item text-decoration-none">
                         <strong class="d-block">{{ profile_user.likes_given.count() }}</strong>

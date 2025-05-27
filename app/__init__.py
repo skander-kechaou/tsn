@@ -2,7 +2,7 @@
 import os
 from flask import Flask, template_rendered, request
 from flask_security import SQLAlchemyUserDatastore
-from .extensions import db, migrate, socketio, security # security is an empty Security() instance
+from .extensions import db, migrate, socketio, security, csrf  # security is an empty Security() instance
 from .config import Config
 
 # ---> IMPORT YOUR CUSTOM FORM CLASS DIRECTLY <---
@@ -25,6 +25,7 @@ def create_app(config_class=Config):
     db.init_app(app)
     migrate.init_app(app, db)
     socketio.init_app(app)
+    csrf.init_app(app)
 
     # --- SIGNAL HANDLER ---
     @template_rendered.connect_via(app)

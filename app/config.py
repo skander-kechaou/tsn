@@ -4,6 +4,7 @@ import os
 # app/config.py
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'a-very-secret-key')
+    WTF_CSRF_ENABLED = True
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'postgresql://postgres:password@localhost:5432/tsn_db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 

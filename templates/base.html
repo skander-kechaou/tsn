@@ -43,6 +43,11 @@
                         <i class="fas fa-users"></i> Users
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('profile.view_friends', username=current_user.username) }}">
+                        <i class="fas fa-address-book"></i> Friends
+                    </a>
+                </li>
             </ul>
         {% else %}
             {# This empty ul with mx-auto acts as a spacer to help push login/register to the right #}
@@ -105,8 +110,28 @@
 </div>
 
 <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-{% block scripts %}{% endblock scripts %}
+{% block scripts %}
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const mediaUploadInput = document.getElementById('actualMediaUploadField'); // Or your correct ID
+                const selectedFileNameDisplay = document.getElementById('selectedFileName');
+
+                if (mediaUploadInput && selectedFileNameDisplay) {
+                    mediaUploadInput.addEventListener('change', function () {
+                        if (this.files && this.files.length > 0) {
+                            selectedFileNameDisplay.textContent = 'Selected: ' + this.files[0].name;
+                        } else {
+                            selectedFileNameDisplay.textContent = '';
+                        }
+                    });
+                }
+                // Initialize Bootstrap dropdowns manually if needed, though data-toggle should work
+                // $('.dropdown-toggle').dropdown(); // This requires the full jQuery, not slim, sometimes.
+                                                // But data-toggle usually suffices.
+            });
+        </script>
+{% endblock scripts %}
 </body>
 </html>

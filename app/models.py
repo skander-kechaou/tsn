@@ -82,7 +82,8 @@ class User(db.Model, UserMixin):
         secondary=friendships,
         primaryjoin=(friendships.c.user_id == id),
         secondaryjoin=(friendships.c.friend_id == id),
-        backref='friend_of'
+        backref=db.backref('friend_of', lazy='dynamic'),
+        lazy='dynamic'
     )
 
     # >>> START Flask-Security additions <<<
@@ -92,8 +93,31 @@ class User(db.Model, UserMixin):
     # >>> END Flask-Security additions <<<
 
     def friend_ids(self):
-        """Return a list of user IDs that this user considers friends."""
         return [friend.id for friend in self.friends]
+
+    def add_friend(self, user_to_add):
+        if not self.is_friend(user_to_add):
+            self.friends.append(user_to_add)
+            user_to_add.friends.append(self)  # mutual friendship
+            return True
+        return False  # already friends or trying to add myself as friend
+
+    def remove_friend(self, user_to_remove):
+        if self.is_friend(user_to_remove):
+            self.friends.remove(user_to_remove)
+            user_to_remove.friends.remove(self)  # mutual friendship
+            return True
+        return False  # Not friends
+
+    def is_friend(self, user_to_check):
+        if user_to_check == self:  # can't be friends with my own self
+            return False
+        return user_to_check in self.friends
+
+    def friend_count(self):
+        if self.friends:
+            return self.friends.count()
+        return 0
 
     def __repr__(self):
         return f"<User {self.username}>"
@@ -112,6 +136,7 @@ class Post(db.Model):
                             cascade="all, delete-orphan")
     comments = db.relationship('Comment', backref='commented_on_post', lazy='dynamic',
                                cascade="all, delete-orphan")  # Changed backref
+    media = db.Column(db.String(255), nullable=True)
 
     def like_count(self):
         return self.likes.count()
@@ -121,6 +146,9 @@ class Post(db.Model):
             return False
         # Check if there's a Like record linking this user to this specific post_id
         return Like.query.filter_by(user_id=user.id, post_id=self.id).first() is not None
+
+    def comment_count(self):
+        return self.comments.count()
 
 
 class Comment(db.Model):

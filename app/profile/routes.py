@@ -1,5 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import current_user, login_required
+from sqlalchemy import or_
+
 from .. import db
 from ..models import User, Post, VisibilityEnum, Like, Share
 from .forms import EditProfileForm  # Create a WTForm for profile editing
@@ -101,6 +103,7 @@ def view_profile(username, view_type=None):
         items_to_display = pagination_obj.items
         active_tab = 'shares'
 
+
     return render_template('profile/view.html',
                            profile_user=user,
                            items=items_to_display,  # Posts, Likes, or Shares
@@ -161,3 +164,46 @@ def edit_profile(username):
         pass  # Form is already pre-populated by obj=current_user if attribute names match
 
     return render_template('profile/edit.html', title='Edit Profile', form=form)
+
+@bp.route('/add_friend/<username>', methods=['POST'])
+@login_required
+def add_friend_route(username): # Changed name to avoid conflict
+    user_to_add = User.query.filter_by(username=username).first_or_404()
+    if current_user == user_to_add:
+        flash("You cannot add yourself as a friend.", "warning")
+        return redirect(url_for('profile.view_profile', username=username))
+
+    if current_user.add_friend(user_to_add):
+        db.session.commit()
+        flash(f"You are now friends with {username}!", "success")
+    else:
+        flash(f"You are already friends with {username} or the request failed.", "info")
+    return redirect(url_for('profile.view_profile', username=username))
+
+@bp.route('/unfriend/<username>', methods=['POST'])
+@login_required
+def unfriend_route(username): # Changed name
+    user_to_unfriend = User.query.filter_by(username=username).first_or_404()
+    if current_user.remove_friend(user_to_unfriend):
+        db.session.commit()
+        flash(f"You are no longer friends with {username}.", "success")
+    else:
+        flash(f"You were not friends with {username} or the request failed.", "info")
+    return redirect(url_for('profile.view_profile', username=username))
+
+@bp.route('/<username>/friends')
+@login_required
+def view_friends(username):
+    user = User.query.filter_by(username=username).first_or_404()
+    page = request.args.get('page', 1, type=int)
+    items_per_page = current_app.config.get('FRIENDS_PER_PAGE', 12) # New config var
+
+    # user.friends is now a query object
+    friends_pagination = user.friends.order_by(User.username).paginate(
+        page=page, per_page=items_per_page, error_out=False
+    )
+    # friends_list passed to template is now the pagination object
+    return render_template('profile/friends_list.html',
+                           profile_user=user,
+                           friends_list=friends_pagination, # Pass the whole pagination object
+                           search_query=None) # Assuming no search on this specific page

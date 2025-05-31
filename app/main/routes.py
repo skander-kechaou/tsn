@@ -7,7 +7,7 @@ import os
 from sqlalchemy import or_
 from flask_dance.consumer import oauth_authorized, oauth_error
 from flask_dance.contrib.google import google  # The proxy for the current Google session
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, send_from_directory, abort
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, send_from_directory, abort, jsonify
 # from flask_security import Security, SQLAlchemyUserDatastore, UserMixin, RoleMixin
 from flask_login import LoginManager, login_user, logout_user, current_user, login_required
 from flask_security.utils import hash_password  # Or other utils
@@ -15,7 +15,7 @@ from dateutil.parser import parse as parse_date
 from werkzeug.utils import secure_filename
 
 from .forms import PostForm, EditPostForm, CommentForm
-from ..models import Post, VisibilityEnum, Like, User, GenderEnum, Comment
+from ..models import Post, VisibilityEnum, Like, User, GenderEnum, Comment, Message
 from .. import db, security
 
 bp = Blueprint('main', __name__,
@@ -449,3 +449,37 @@ def add_comment(post_id):
 @bp.route('/message')
 def message():
     return render_template('main/message.html')
+
+@bp.route('/messages')
+@login_required
+def messages():
+    friends = current_user.friends.order_by(User.first_name).all() if hasattr(current_user.friends, 'order_by') else list(current_user.friends)
+    return render_template('main/messages.html', friends=friends)
+
+@bp.route('/messages/history/<int:friend_id>')
+@login_required
+def message_history(friend_id):
+    friend = User.query.get_or_404(friend_id)
+    if not current_user.is_friend(friend):
+        return jsonify({'error': 'Not friends'}), 403
+
+    messages = (
+        db.session.query(Message)
+        .filter(
+            ((Message.sender_id == current_user.id) & (Message.recipient_id == friend_id)) |
+            ((Message.sender_id == friend_id) & (Message.recipient_id == current_user.id))
+        )
+        .order_by(Message.timestamp.asc())
+        .all()
+    )
+    messages_data = [
+        {
+            'id': m.id,
+            'sender_id': m.sender_id,
+            'recipient_id': m.recipient_id,
+            'content': m.content,
+            'timestamp': m.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+        }
+        for m in messages
+    ]
+    return jsonify(messages_data)

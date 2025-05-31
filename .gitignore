@@ -3,3 +3,7 @@
 __pycache__/
 *.py[cod]
 *.pyc
+*.pyc
+app/__pycache__/__init__.cpython-312.pyc
+*.pyc
+*.pyc

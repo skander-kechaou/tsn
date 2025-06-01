@@ -3,18 +3,21 @@ from flask_login import current_user
 from datetime import datetime
 from . import socketio, db
 from .models import Message, User
+from .events import send_notification
 
 @socketio.on('connect')
 def handle_connect():
     if current_user.is_authenticated:
-        join_room(f'user_{current_user.id}')
-        print(f"User {current_user.username} connected")
+        room = f'user_{current_user.id}'
+        join_room(room)
+        print(f"User {current_user.username} connected and joined room {room}")
 
 @socketio.on('disconnect')
 def handle_disconnect():
     if current_user.is_authenticated:
-        leave_room(f'user_{current_user.id}')
-        print(f"User {current_user.username} disconnected")
+        room = f'user_{current_user.id}'
+        leave_room(room)
+        print(f"User {current_user.username} disconnected from room {room}")
 
 @socketio.on('message')
 def handle_message(data):
@@ -48,10 +51,29 @@ def handle_message(data):
             'is_read': False
         }
         # Emit to recipient's room
-        emit('message', message_data, room=f'user_{recipient_id}')
+        recipient_room = f'user_{recipient_id}'
+        emit('message', message_data, room=recipient_room)
+        print(f"Sent message to room {recipient_room}")
+        
+        # Send notification to recipient
+        sender = User.query.get(current_user.id)
+        notification_message = f'New message from {sender.username}: {content[:30]}'
+        notification_link = f'/messages?user={current_user.id}'
+        print(f"Sending notification to user {recipient_id}: {notification_message}")
+        send_notification(
+            user_id=recipient_id,
+            message=notification_message,
+            notification_type='message',
+            link=notification_link
+        )
+        
         # Also emit to sender's room so they see their own message
-        emit('message', message_data, room=f'user_{current_user.id}')
+        sender_room = f'user_{current_user.id}'
+        emit('message', message_data, room=sender_room)
+        print(f"Sent message to sender's room {sender_room}")
+        
     except Exception as e:
+        print(f"Error sending message: {str(e)}")
         db.session.rollback()
         emit('error', {'message': 'Failed to send message'}, room=f'user_{current_user.id}')
 

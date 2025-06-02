@@ -58,7 +58,7 @@
                                                             </button>
                                                         </form>
                                                     {% endif %}
-                                                    <a href="#" class="btn btn-outline-primary btn-sm ml-2"><i
+                                                    <a href="{{ url_for('main.messages', user=profile_user.id) }}" class="btn btn-outline-primary btn-sm ml-2"><i
                                                             class="fas fa-envelope fa-fw"></i> Message</a>
                                                 {% endif %}
                                             {% endif %}

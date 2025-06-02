@@ -155,12 +155,22 @@ class Comment(db.Model):
     __tablename__ = 'comment'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete="CASCADE"), nullable=False)
-    post_id = db.Column(db.Integer, db.ForeignKey('post.id', ondelete="CASCADE"), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id', ondelete="CASCADE"), nullable=True)
+    share_id = db.Column(db.Integer, db.ForeignKey('share.id', ondelete="CASCADE"), nullable=True)
     content = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     likes = db.relationship('Like', foreign_keys='Like.comment_id', backref='liked_comment_object', lazy='dynamic',
                             cascade="all, delete-orphan")
+
+    __table_args__ = (
+        # Only ONE of post_id or share_id must be non-null at once
+        CheckConstraint(
+            "(CASE WHEN post_id IS NOT NULL THEN 1 ELSE 0 END + "
+            "CASE WHEN share_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
+            name="ck_comment_target_exclusive"
+        ),
+    )
 
     def like_count(self):
         return self.likes.count()
@@ -182,6 +192,8 @@ class Share(db.Model):
 
     likes = db.relationship('Like', foreign_keys='Like.share_id', backref='liked_share_object', lazy='dynamic',
                             cascade="all, delete-orphan")
+    comments = db.relationship('Comment', foreign_keys='Comment.share_id', backref='commented_on_share', lazy='dynamic',
+                               cascade="all, delete-orphan")
 
     def like_count(self):
         return self.likes.count()
@@ -190,6 +202,9 @@ class Share(db.Model):
         if not user or not user.is_authenticated:
             return False
         return Like.query.filter_by(user_id=user.id, share_id=self.id).first() is not None
+
+    def comment_count(self):
+        return self.comments.count()
 
 
 class Like(db.Model):

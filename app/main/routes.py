@@ -3,11 +3,12 @@ import secrets
 import uuid
 from datetime import datetime, date
 import os
+from urllib.parse import urlencode
 
-from sqlalchemy import or_
+from sqlalchemy import or_, literal, text
 from flask_dance.consumer import oauth_authorized, oauth_error
 from flask_dance.contrib.google import google  # The proxy for the current Google session
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, send_from_directory, abort
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, send_from_directory, abort, jsonify
 # from flask_security import Security, SQLAlchemyUserDatastore, UserMixin, RoleMixin
 from flask_login import LoginManager, login_user, logout_user, current_user, login_required
 from flask_security.utils import hash_password  # Or other utils
@@ -15,7 +16,7 @@ from dateutil.parser import parse as parse_date
 from werkzeug.utils import secure_filename
 
 from .forms import PostForm, EditPostForm, CommentForm
-from ..models import Post, VisibilityEnum, Like, User, GenderEnum, Comment
+from ..models import Post, VisibilityEnum, Like, User, GenderEnum, Comment, Share
 from .. import db, security
 
 bp = Blueprint('main', __name__,
@@ -260,8 +261,9 @@ def save_post_media(form_media_file):
 @login_required
 def dashboard():
     post_form = PostForm()
+    form = CommentForm()
 
-    if post_form.validate_on_submit():  # This will now validate media_upload if it has validators
+    if post_form.validate_on_submit():
         current_app.logger.info("--- Dashboard POST request, form validated ---")
         media_path_for_db = None
 
@@ -307,6 +309,7 @@ def dashboard():
     page = request.args.get('page', 1, type=int)
     actual_current_user = current_user._get_current_object()
 
+    # Base conditions for posts visibility
     conditions = []
     conditions.append(Post.visibility == VisibilityEnum.PUBLIC)
 
@@ -320,20 +323,50 @@ def dashboard():
             (Post.visibility == VisibilityEnum.PRIVATE) & (Post.user_id == actual_current_user.id)
         )
 
-    posts_query = Post.query.filter(or_(*conditions)) \
-        .order_by(Post.timestamp.desc())
+    # Get posts and shares as a union
+    posts_query = Post.query.filter(or_(*conditions))
+    shares_query = db.session.query(Share).join(Post).filter(or_(*conditions))
 
+    # Combine posts and shares, ordered by timestamp
+    combined_query = db.session.query(
+        db.union(
+            posts_query.with_entities(
+                Post.id.label('id'),
+                Post.timestamp.label('timestamp'),
+                literal('post').label('type'),
+                Post.id.label('original_id')
+            ),
+            shares_query.with_entities(
+                Share.id.label('id'),
+                Share.timestamp.label('timestamp'),
+                literal('share').label('type'),
+                Share.post_id.label('original_id')
+            )
+        ).alias()
+    ).order_by(text('timestamp DESC'))
+
+    # Paginate the combined results
     posts_per_page = current_app.config.get('POSTS_PER_PAGE', 10)
-    posts_pagination = posts_query.paginate(page=page, per_page=posts_per_page, error_out=False)
+    page = request.args.get('page', 1, type=int)
+    pagination = combined_query.paginate(page=page, per_page=posts_per_page, error_out=False)
 
-    # THIS IS THE LIST OF POSTS PASSED TO THE TEMPLATE
-    posts_on_page = posts_pagination.items
+    # Fetch the actual posts and shares
+    items = []
+    for item in pagination.items:
+        if item.type == 'post':
+            post = Post.query.get(item.id)
+            if post:
+                items.append(('post', post))
+        else:
+            share = Share.query.get(item.id)
+            if share:
+                items.append(('share', share))
 
     return render_template('main/dashboard.html',
-                           title='Dashboard',
-                           post_form=post_form,
-                           posts=posts_on_page,  # <-- This is 'posts' in the template
-                           pagination=posts_pagination)
+                         post_form=post_form,
+                         form=form,
+                         items=items,
+                         pagination=pagination)
 
 
 @bp.route('/uploads/post_media/<path:filename>')  # URL pattern
@@ -447,5 +480,115 @@ def add_comment(post_id):
 
 
 @bp.route('/message')
+@login_required
 def message():
     return render_template('main/message.html')
+
+@bp.route('/post/<int:post_id>/share', methods=['GET', 'POST'])
+@login_required
+def share_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    
+    if request.method == 'POST':
+        # Handle the share creation
+        share_content = request.form.get('share_content')
+        new_share = Share(
+            user_id=current_user.id,
+            post_id=post_id,
+            content=share_content if share_content else None
+        )
+        db.session.add(new_share)
+        try:
+            db.session.commit()
+            flash('Post shared successfully!', 'success')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error sharing post: {e}")
+            flash('Error sharing post.', 'danger')
+        return redirect(url_for('main.dashboard'))
+    
+    # For GET requests or XHR requests, return the existing share modal data
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        post_url = url_for('main.view_post', post_id=post_id, _external=True)
+        return jsonify({'post_url': post_url})
+    
+    return render_template('main/share_post.html', post=post)
+
+@bp.route('/post/<int:post_id>')
+def view_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    
+    # Check if the user has permission to view this post
+    if post.visibility != VisibilityEnum.PUBLIC:
+        if not current_user.is_authenticated:
+            abort(403)
+        if post.visibility == VisibilityEnum.PRIVATE and post.author != current_user:
+            abort(403)
+        if post.visibility == VisibilityEnum.FRIENDS and post.author.id not in current_user.friend_ids():
+            abort(403)
+    
+    # Create comment form if user is authenticated
+    form = CommentForm() if current_user.is_authenticated else None
+    
+    # If it's an AJAX request, return just the post content template
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render_template('main/_post_content.html', post=post, form=form)
+    
+    # For regular requests, return the full page
+    is_share = hasattr(post, 'original_post')
+    return render_template('main/view_post.html', post=post, form=form, is_share=is_share)
+
+@bp.route('/share/<int:share_id>/like', methods=['POST'])
+@login_required
+def like_share(share_id):
+    share = Share.query.get_or_404(share_id)
+    
+    # Check if user already liked this share
+    existing_like = Like.query.filter_by(user_id=current_user.id, share_id=share_id).first()
+    
+    if existing_like:
+        # Unlike
+        db.session.delete(existing_like)
+        message = 'Share unliked!'
+    else:
+        # Like
+        like = Like(user_id=current_user.id, share_id=share_id)
+        db.session.add(like)
+        message = 'Share liked!'
+    
+    try:
+        db.session.commit()
+        flash(message, 'success')
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error liking/unliking share: {e}")
+        flash('Error processing like.', 'danger')
+    
+    return redirect(request.referrer or url_for('main.dashboard'))
+
+@bp.route('/share/<int:share_id>/comment', methods=['POST'])
+@login_required
+def add_comment_to_share(share_id):
+    share = Share.query.get_or_404(share_id)
+    comment_text = request.form.get('comment_text')
+    
+    if not comment_text:
+        flash('Comment cannot be empty.', 'danger')
+        return redirect(request.referrer or url_for('main.dashboard'))
+    
+    comment = Comment(
+        content=comment_text,
+        user_id=current_user.id,
+        share_id=share_id
+    )
+    
+    try:
+        db.session.add(comment)
+        db.session.commit()
+        flash('Comment added successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error adding comment to share: {e}")
+        flash('Error adding comment.', 'danger')
+    
+    return redirect(request.referrer or url_for('main.dashboard'))

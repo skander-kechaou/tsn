@@ -489,3 +489,18 @@ label[for^="profile_pic_upload"]:hover .profile-pic-edit-overlay {
     border-left: 3px solid var(--brand-secondary, #f0a200); /* Orange border for shared posts */
     /* margin-left: 20px; /* Indent shared posts slightly */
 }
+
+.post-content-wrapper {
+    transition: background-color 0.2s ease;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.post-content-wrapper:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+    cursor: pointer;
+}
+
+.text-decoration-none:hover {
+    text-decoration: none !important;
+}

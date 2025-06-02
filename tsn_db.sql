@@ -5,7 +5,7 @@
 -- Dumped from database version 17.5
 -- Dumped by pg_dump version 17.5
 
--- Started on 2025-05-24 18:56:05
+-- Started on 2025-05-27 14:17:42
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -170,7 +170,8 @@ CREATE TABLE public.post (
     user_id integer NOT NULL,
     content text NOT NULL,
     visibility public.visibilityenum NOT NULL,
-    "timestamp" timestamp without time zone NOT NULL
+    "timestamp" timestamp without time zone NOT NULL,
+    media character varying(255)
 );
 
 
@@ -401,7 +402,7 @@ ALTER TABLE ONLY public."user" ALTER COLUMN id SET DEFAULT nextval('public.user_
 --
 
 COPY public.alembic_version (version_num) FROM stdin;
-5bf642e554ca
+ec924eaede78
 \.
 
 
@@ -412,6 +413,10 @@ COPY public.alembic_version (version_num) FROM stdin;
 --
 
 COPY public.comment (id, user_id, post_id, content, "timestamp") FROM stdin;
+1	1	13	hey there :)	2025-05-26 17:18:43.9477
+2	1	14	TAKE ME BACK!!!	2025-05-26 17:25:48.564477
+3	1	14	mamz	2025-05-26 17:32:15.610815
+4	1	14	hello!	2025-05-27 12:06:56.197899
 \.
 
 
@@ -422,6 +427,12 @@ COPY public.comment (id, user_id, post_id, content, "timestamp") FROM stdin;
 --
 
 COPY public.friendships (user_id, friend_id) FROM stdin;
+3	4
+4	3
+3	1
+1	3
+3	2
+2	3
 \.
 
 
@@ -432,17 +443,25 @@ COPY public.friendships (user_id, friend_id) FROM stdin;
 --
 
 COPY public."like" (id, user_id, post_id, comment_id, share_id, "timestamp") FROM stdin;
-2	1	1	\N	\N	\N
 3	1	3	\N	\N	\N
-4	2	1	\N	\N	\N
 5	2	3	\N	\N	\N
 6	1	4	\N	\N	\N
-7	4	1	\N	\N	\N
 8	4	3	\N	\N	\N
 9	4	4	\N	\N	\N
 10	4	5	\N	\N	\N
 14	4	7	\N	\N	\N
 15	4	9	\N	\N	2025-05-24 16:41:36.790249
+16	3	9	\N	\N	2025-05-25 13:10:43.129831
+17	3	8	\N	\N	2025-05-25 13:10:44.691712
+18	3	7	\N	\N	2025-05-25 13:10:46.709828
+19	3	5	\N	\N	2025-05-25 13:10:48.984311
+22	3	4	\N	\N	2025-05-25 13:47:50.94415
+23	3	2	\N	\N	2025-05-25 13:49:27.944787
+24	3	3	\N	\N	2025-05-25 13:50:44.134194
+25	1	12	\N	\N	2025-05-26 14:18:36.396669
+26	1	14	\N	\N	2025-05-26 16:57:58.049762
+27	1	13	\N	\N	2025-05-26 17:20:37.209816
+28	1	2	\N	\N	2025-05-26 17:26:06.338584
 \.
 
 
@@ -452,16 +471,20 @@ COPY public."like" (id, user_id, post_id, comment_id, share_id, "timestamp") FRO
 -- Data for Name: post; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-COPY public.post (id, user_id, content, visibility, "timestamp") FROM stdin;
-1	1	I'm so bored	PUBLIC	2025-05-21 00:00:00
-2	1	Trying to make the profile view work!	FRIENDS	2025-05-20 23:21:22.934969
-3	1	Let's try again	PUBLIC	2025-05-20 23:22:48.909074
-4	2	Hey! I'm new here :)	PUBLIC	2025-05-22 19:08:13.026123
-5	3	hello!	PUBLIC	2025-05-23 15:58:20.047328
-6	3	I'm trying to populate with more posts	FRIENDS	2025-05-23 15:58:26.701554
-7	4	안녕하세요! 꽃길만 걷자 	PUBLIC	2025-05-24 12:38:11.070737
-8	4	Prueba	PUBLIC	2025-05-24 15:34:33.933603
-9	4	Creo que la prueba funciona!	PUBLIC	2025-05-24 15:35:17.479683
+COPY public.post (id, user_id, content, visibility, "timestamp", media) FROM stdin;
+2	1	Trying to make the profile view work!	FRIENDS	2025-05-20 23:21:22.934969	\N
+3	1	Let's try again	PUBLIC	2025-05-20 23:22:48.909074	\N
+4	2	Hey! I'm new here :)	PUBLIC	2025-05-22 19:08:13.026123	\N
+5	3	hello!	PUBLIC	2025-05-23 15:58:20.047328	\N
+6	3	I'm trying to populate with more posts	FRIENDS	2025-05-23 15:58:26.701554	\N
+7	4	안녕하세요! 꽃길만 걷자 	PUBLIC	2025-05-24 12:38:11.070737	\N
+8	4	Prueba	PUBLIC	2025-05-24 15:34:33.933603	\N
+9	4	Creo que la prueba funciona!	PUBLIC	2025-05-24 15:35:17.479683	\N
+10	3	I'm trying to upload media in posts	PUBLIC	2025-05-26 12:45:30.544221	\N
+11	3	Hey	PUBLIC	2025-05-26 13:04:53.518734	\N
+12	3	please work	PUBLIC	2025-05-26 13:36:16.292419	post_media/416af30e14b68a47.gif
+13	3	hi	FRIENDS	2025-05-26 13:56:35.179353	\N
+14	1	Escapade à Nabeul <3	PUBLIC	2025-05-26 14:18:21.275917	post_media/63eefd8acfd93fa1.MP4
 \.
 
 
@@ -515,7 +538,7 @@ COPY public."user" (id, is_active, username, email, password, phone, date_birth,
 -- Name: comment_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.comment_id_seq', 1, false);
+SELECT pg_catalog.setval('public.comment_id_seq', 4, true);
 
 
 --
@@ -524,7 +547,7 @@ SELECT pg_catalog.setval('public.comment_id_seq', 1, false);
 -- Name: like_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.like_id_seq', 15, true);
+SELECT pg_catalog.setval('public.like_id_seq', 28, true);
 
 
 --
@@ -533,7 +556,7 @@ SELECT pg_catalog.setval('public.like_id_seq', 15, true);
 -- Name: post_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.post_id_seq', 9, true);
+SELECT pg_catalog.setval('public.post_id_seq', 14, true);
 
 
 --
@@ -824,7 +847,7 @@ ALTER TABLE ONLY public.share
     ADD CONSTRAINT share_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
 
 
--- Completed on 2025-05-24 18:56:05
+-- Completed on 2025-05-27 14:17:42
 
 --
 -- PostgreSQL database dump complete

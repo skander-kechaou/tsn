@@ -29,14 +29,14 @@
                                     {% if current_user.id == profile_user.id %} {# Safer to compare IDs #}
                                         <a href="{{ url_for('profile.edit_profile', username=profile_user.username) }}"
                                            class="btn btn-outline-secondary btn-sm"><i
-                                                class="fas fa-pencil-alt fa-fw"></i> Edit Profile</a>
+                                                class="fas fa-pencil-alt fa-fw"></i> Arrange Nest</a>
                                     {% else %}
                                         <div class="profile-actions mt-2 mt-md-0">
                                             {% if current_user.is_authenticated %}
                                                 {% if current_user.id == profile_user.id %}
                                                     <a href="{{ url_for('profile.edit_profile', username=profile_user.username) }}"
                                                        class="btn btn-outline-secondary btn-sm"><i
-                                                            class="fas fa-pencil-alt fa-fw"></i> Edit Profile</a>
+                                                            class="fas fa-pencil-alt fa-fw"></i> Arrange Nest</a>
                                                 {% else %}
                                                     {# Use the is_friend method from your User model #}
                                                     {% if current_user.is_friend(profile_user) %}
@@ -99,7 +99,7 @@
                     <a href="{{ url_for('profile.view_profile', username=profile_user.username, view_type='posts') }}"
                        class="stat-item text-decoration-none">
                         <strong class="d-block">{{ profile_user.posts.count() }}</strong>
-                        <span class="text-muted">Posts</span>
+                        <span class="text-muted">Hatches</span>
                     </a>
                     <a href="{{ url_for('profile.view_friends', username=profile_user.username) }}"
                        class="stat-item text-decoration-none">
@@ -110,12 +110,12 @@
                                 0
                             {% endif %}
                         </strong>
-                        <span class="text-muted">Friends</span>
+                        <span class="text-muted">Nestlings</span>
                     </a>
                     <a href="{{ url_for('profile.view_profile', username=profile_user.username, view_type='likes') }}"
                        class="stat-item text-decoration-none">
                         <strong class="d-block">{{ profile_user.likes_given.count() }}</strong>
-                        <span class="text-muted">Likes Given</span>
+                        <span class="text-muted">Seeds Given</span>
                     </a>
                 </div>
             </div>
@@ -126,19 +126,19 @@
             <li class="nav-item">
                 <a class="nav-link {% if active_tab == 'posts' %}active{% endif %}"
                    href="{{ url_for('profile.view_profile', username=profile_user.username, view_type='posts') }}">
-                    <i class="fas fa-th-list"></i> Posts
+                    <i class="fas fa-th-list"></i> Hatches
                 </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link {% if active_tab == 'likes' %}active{% endif %}"
                    href="{{ url_for('profile.view_profile', username=profile_user.username, view_type='likes') }}">
-                    <i class="fas fa-heart"></i> Likes
+                    <i class="fas fa-heart"></i> Seeds
                 </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link {% if active_tab == 'shares' %}active{% endif %}"
                    href="{{ url_for('profile.view_profile', username=profile_user.username, view_type='shares') }}">
-                    <i class="fas fa-retweet"></i> Shares
+                    <i class="fas fa-retweet"></i> Echoes
                 </a>
             </li>
             {# Add other tabs like "Friends", "Photos" etc. as needed #}

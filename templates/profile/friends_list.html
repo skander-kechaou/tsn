@@ -7,7 +7,7 @@
             {# Search Bar #}
             <form method="GET" action="{{ url_for('main.users') }}"> {# Point to your users list route #}
                 <div class="input-group">
-                    <input type="text" class="form-control form-control-lg" name="q" placeholder="Search users by name or username..." value="{{ search_query or '' }}">
+                    <input type="text" class="form-control form-control-lg" name="q" placeholder="Search nestlings by name or username..." value="{{ search_query or '' }}">
                     <div class="input-group-append">
                         <button class="btn btn-primary btn-lg" type="submit">Search</button>
                     </div>
@@ -19,7 +19,7 @@
     {% if search_query %}
         <h2 class="mb-3">Search Results for "{{ search_query }}"</h2>
     {% else %}
-        <h2 class="mb-3">Your Friends</h2>
+        <h2 class="mb-3">Your Nestlings</h2>
     {% endif %}
 
     {% if friends_list.items %}

@@ -17,10 +17,10 @@ friendships = db.Table('friendships',
 
 # >>> START Flask-Security additions <<<
 # Association table for Users and Roles
-roles_users = db.Table('roles_users',
-                       db.Column('user_id', db.Integer(), db.ForeignKey('user.id')),
-                       db.Column('role_id', db.Integer(), db.ForeignKey('role.id'))
-                       )
+roles_users = db.Table('roles_users', db.Model.metadata,
+    db.Column('user_id', db.Integer(), db.ForeignKey('user.id', ondelete="CASCADE"), primary_key=True), # Add primary_key=True
+    db.Column('role_id', db.Integer(), db.ForeignKey('role.id', ondelete="CASCADE"), primary_key=True)  # Add primary_key=True
+)
 
 
 class GenderEnum(PyEnum):

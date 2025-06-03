@@ -7,7 +7,7 @@
         <div class="col-md-8">
             <div class="card shadow-sm">
                 <div class="card-header">
-                    <h2>Edit Post</h2>
+                    <h2>Edit Hatch</h2>
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('main.edit_post', post_id=post.id) }}">
@@ -40,7 +40,7 @@
                                 {% set filename_lower = post.media.lower() %}
                                 {% set media_url = url_for('main.uploaded_post_media', filename=post.media.split('/')[-1]) if post.media.startswith('post_media/') else url_for('static', filename=post.media) %}
                                 {% if filename_lower.endswith(('.png', '.jpg', '.jpeg', '.gif')) %}
-                                    <img src="{{ media_url }}" class="img-thumbnail" alt="Current post media" style="max-height: 200px; max-width: 100%;">
+                                    <img src="{{ media_url }}" class="img-thumbnail" alt="Current hatch media" style="max-height: 200px; max-width: 100%;">
                                 {% elif filename_lower.endswith(('.mp4', '.mov', '.avi', '.mkv', '.webm')) %}
                                     <video controls width="100%" style="max-height: 200px; max-width: 100%;">
                                         <source src="{{ media_url }}" type="video/{{ filename_lower.split('.')[-1] }}">
@@ -51,7 +51,7 @@
                         {% endif %}
 
                         <div class="form-group mt-4">
-                            {{ form.submit(class="btn btn-primary") }}
+                            {{ form.submit(class="btn btn-primary", value="Update Hatch") }}
                             <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary ml-2">Cancel</a>
                         </div>
                     </form>

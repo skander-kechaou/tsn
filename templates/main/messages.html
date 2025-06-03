@@ -3,22 +3,31 @@
 <div class="container mt-4">
     <div class="row justify-content-center">
         <div class="col-md-3 chat-list">
-            <h5>Chats</h5>
+            <h5>Chirps</h5>
             {% if friends and friends|length > 0 %}
-                {% for friend in friends %}
-                    <div class="chat-list-item" data-friend-id="{{ friend.id }}">
-                        <img src="{{ friend.profile_pic or url_for('static', filename='images/default.jpg') }}" class="profile-pic" alt="Profile">
-                        <span>{{ friend.first_name }} {{ friend.last_name }}</span>
-                    </div>
-                {% endfor %}
+                <div id="chat-list-container">
+                    {% for friend in friends %}
+                        <div class="chat-list-item" data-friend-id="{{ friend.id }}">
+                            <a href="{{ url_for('profile.view_profile', username=friend.username) }}" class="text-decoration-none">
+                                <img src="{{ url_for('static', filename=friend.profile_pic if friend.profile_pic else 'images/default_profile.jpg') }}"
+                                     class="profile-pic" alt="{{ friend.username }}'s profile picture">
+                            </a>
+                            <div class="chat-preview">
+                                <div class="friend-name">{{ friend.first_name }} {{ friend.last_name }}</div>
+                                <div class="last-message" data-friend-id="{{ friend.id }}">No chirps yet</div>
+                                <div class="last-message-time" data-friend-id="{{ friend.id }}"></div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
             {% else %}
-                <div class="text-muted">No friends found.</div>
+                <div class="text-muted">No nestlings found.</div>
             {% endif %}
         </div>
         <div class="col-md-9 chat-container">
             <div class="chat-messages" id="chat-messages"></div>
             <div class="chat-input">
-                <input type="text" class="form-control" id="message-input" placeholder="Type a message...">
+                <input type="text" class="form-control" id="message-input" placeholder="Type a chirp...">
             </div>
         </div>
     </div>
@@ -26,9 +35,44 @@
 <style>
     body { background: #f7f9fb; }
     .chat-list { background: #fff; border-radius: 10px 0 0 10px; padding: 20px; height: 80vh; overflow-y: auto; }
-    .chat-list-item { cursor: pointer; padding: 10px; border-radius: 5px; margin-bottom: 5px; display: flex; align-items: center; transition: background 0.2s; }
+    .chat-list-item { 
+        cursor: pointer; 
+        padding: 10px; 
+        border-radius: 5px; 
+        margin-bottom: 5px; 
+        display: flex; 
+        align-items: center; 
+        transition: background 0.2s;
+        border-bottom: 1px solid #eee;
+    }
     .chat-list-item.active, .chat-list-item:hover { background: #e9ecef; }
-    .profile-pic { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; margin-right: 10px; }
+    .profile-pic { 
+        width: 48px; 
+        height: 48px; 
+        border-radius: 50%; 
+        object-fit: cover; 
+        margin-right: 10px; 
+    }
+    .chat-preview {
+        flex: 1;
+        min-width: 0;
+    }
+    .friend-name {
+        font-weight: 500;
+        margin-bottom: 2px;
+    }
+    .last-message {
+        font-size: 0.9em;
+        color: #666;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 200px;
+    }
+    .last-message-time {
+        font-size: 0.8em;
+        color: #999;
+    }
     .online-dot { width: 10px; height: 10px; background: #28a745; border-radius: 50%; display: inline-block; margin-left: 6px; }
     .chat-container { background: #fff; border-radius: 0 10px 10px 0; height: 80vh; display: flex; flex-direction: column; }
     .chat-messages { flex: 1; overflow-y: auto; padding: 20px; }
@@ -90,6 +134,56 @@
 <script>
 const currentUserId = "{{ current_user.id }}";
 let selectedFriendId = null;
+let chatRefreshInterval = null;
+let lastMessages = {};  // Store last messages for each friend
+
+// Function to update chat list order
+function updateChatListOrder() {
+    const container = document.getElementById('chat-list-container');
+    const items = Array.from(container.children);
+    
+    items.sort((a, b) => {
+        // Get the last message timestamp for each conversation, regardless of sender
+        const aTime = lastMessages[a.getAttribute('data-friend-id')]?.timestamp || -1;
+        const bTime = lastMessages[b.getAttribute('data-friend-id')]?.timestamp || -1;
+        
+        // If both have no messages, keep original order
+        if (aTime === -1 && bTime === -1) {
+            return 0;
+        }
+        
+        // If only one has no messages, put it at the end
+        if (aTime === -1) return 1;
+        if (bTime === -1) return -1;
+        
+        // Sort by most recent message timestamp (newest first)
+        // This considers both sent and received messages equally
+        return new Date(bTime) - new Date(aTime);
+    });
+    
+    items.forEach(item => container.appendChild(item));
+}
+
+// Function to update last message preview
+function updateLastMessage(friendId, message) {
+    const lastMessageEl = document.querySelector(`.last-message[data-friend-id="${friendId}"]`);
+    const lastMessageTimeEl = document.querySelector(`.last-message-time[data-friend-id="${friendId}"]`);
+    
+    if (lastMessageEl && lastMessageTimeEl) {
+        if (message) {
+            // Show the last message content regardless of sender
+            const isSent = message.sender_id == currentUserId;
+            lastMessageEl.textContent = `${isSent ? 'You: ' : ''}${message.content}`;
+            lastMessageTimeEl.textContent = formatTimestamp(message.timestamp);
+            lastMessages[friendId] = message;
+        } else {
+            lastMessageEl.textContent = "No chirps yet";
+            lastMessageTimeEl.textContent = "";
+            lastMessages[friendId] = null;
+        }
+        updateChatListOrder();
+    }
+}
 
 // Handle friend selection
 const chatListItems = document.querySelectorAll('.chat-list-item');
@@ -98,7 +192,18 @@ chatListItems.forEach(item => {
         chatListItems.forEach(i => i.classList.remove('active'));
         this.classList.add('active');
         selectedFriendId = this.getAttribute('data-friend-id');
+        
+        if (chatRefreshInterval) {
+            clearInterval(chatRefreshInterval);
+        }
+        
         loadChatHistory(selectedFriendId);
+        
+        chatRefreshInterval = setInterval(() => {
+            if (selectedFriendId) {
+                loadChatHistory(selectedFriendId);
+            }
+        }, 1000);
     });
 });
 
@@ -112,6 +217,13 @@ function loadChatHistory(friendId) {
                 chatMessages.innerHTML = `<div class='text-danger'>${messages.error}</div>`;
                 return;
             }
+            
+            if (messages.length > 0) {
+                // Update last message preview
+                const lastMessage = messages[messages.length - 1];
+                updateLastMessage(friendId, lastMessage);
+            }
+            
             messages.forEach(msg => {
                 const isSent = msg.sender_id == currentUserId;
                 const bubbleClass = isSent ? 'sent' : 'received';
@@ -160,21 +272,50 @@ socket.on('message', function(data) {
     }
 });
 
+// Clean up interval when leaving the page
+window.addEventListener('beforeunload', function() {
+    if (chatRefreshInterval) {
+        clearInterval(chatRefreshInterval);
+    }
+});
+
 // On page load, check for ?user=<id> in URL and open that chat
 function getQueryParam(name) {
     const url = new URL(window.location.href);
     return url.searchParams.get(name);
 }
 
+// Initialize last messages for all friends
 document.addEventListener('DOMContentLoaded', function() {
     const userIdFromQuery = getQueryParam('user');
     if (userIdFromQuery) {
-        // Find the chat list item with this friend id and trigger click
         const item = document.querySelector(`.chat-list-item[data-friend-id="${userIdFromQuery}"]`);
         if (item) {
             item.click();
         }
     }
+    
+    // Load initial last messages for all friends
+    document.querySelectorAll('.chat-list-item').forEach(item => {
+        const friendId = item.getAttribute('data-friend-id');
+        const lastMessageEl = document.querySelector(`.last-message[data-friend-id="${friendId}"]`);
+        const lastMessageTimeEl = document.querySelector(`.last-message-time[data-friend-id="${friendId}"]`);
+        
+        // Set initial state to "No chirps yet"
+        lastMessageEl.textContent = "No chirps yet";
+        lastMessageTimeEl.textContent = "";
+        lastMessages[friendId] = null;
+        
+        fetch(`/messages/history/${friendId}`)
+            .then(response => response.json())
+            .then(messages => {
+                if (messages.length > 0) {
+                    const lastMessage = messages[messages.length - 1];
+                    updateLastMessage(friendId, lastMessage);
+                }
+                updateChatListOrder();
+            });
+    });
 });
 </script>
 {% endblock %} 

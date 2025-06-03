@@ -77,15 +77,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             });
         } else {
-            notifContainer.innerHTML = '<span class="dropdown-item text-muted" id="notif-empty">No new notifications</span>';
+            notifContainer.innerHTML = '<span class="dropdown-item text-muted" id="notif-empty">No new chimes</span>';
         }
     }
 
     // Format timestamp to relative time
     function formatTimestamp(timestamp) {
+        console.log('Raw timestamp:', timestamp);
         const date = new Date(timestamp);
+        console.log('Parsed date:', date);
         const now = new Date();
+        console.log('Current time:', now);
         const diff = now - date;
+        console.log('Time difference (ms):', diff);
         
         // Less than a minute
         if (diff < 60000) {

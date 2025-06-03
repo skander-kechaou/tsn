@@ -5,13 +5,13 @@
     <div class="row align-items-center"> {# align-items-center to vertically center content if columns have different heights #}
         {# Left Column: Welcome Text & Value Proposition #}
         <div class="col-md-7 col-lg-8"> {# Takes up more space on medium and larger screens #}
-            <h1 class="display-4">Connect and Share</h1>
+            <h1 class="display-4">Welcome to The Nest</h1>
             <p class="lead">
-                Join TSN Platform, the next-generation social network designed to bring people together,
-                foster meaningful connections, and share your moments with the world.
+                Join our cozy community where birdies come together to share their stories,
+                build meaningful connections, and create a warm, welcoming space for everyone.
             </p>
             <hr class="my-4">
-            <p>Discover new friends, join communities, and stay updated with what matters to you.</p>
+            <p>Find your flock, join the conversation, and stay connected with what matters to you.</p>
             {# You can add more marketing text or features here #}
 {#            <img src="{{ url_for('static', filename='images/social_networking_illustration.svg') }}" class="img-fluid mt-3" alt="Social Connection Illustration" style="max-width: 400px; display: block; margin: auto;">#}
             {# Replace with an actual relevant image #}
@@ -22,13 +22,13 @@
             <div class="card shadow">
                 <div class="card-body">
                     <h2 class="card-title text-center mb-4">Welcome Back!</h2>
-                    <p class="text-center">Log in to continue to TSN Platform.</p>
-                    <a href="{{ url_for('security.login') }}" class="btn btn-primary btn-block btn-lg mb-3">Log In</a>
+                    <p class="text-center">Missed the Nest?</p>
+                    <a href="{{ url_for('security.login') }}" class="btn btn-primary btn-block btn-lg mb-3">Fly In</a>
                     <a href="{{ url_for('google.login') }}" class="btn btn-danger btn-lg btn-block">
-                    <i class="fab fa-google mr-2"></i>Log In with Google </a>
+                    <i class="fab fa-google mr-2"></i>Fly In with Google</a>
                     <hr>
-                    <p class="text-center">New to TSN Platform?</p>
-                    <a href="{{ url_for('security.register') }}" class="btn btn-success btn-block btn-lg">Create New Account</a>
+                    <p class="text-center">New here?</p>
+                    <a href="{{ url_for('security.register') }}" class="btn btn-success btn-block btn-lg">Build Your Nest</a>
                 </div>
             </div>
         </div>

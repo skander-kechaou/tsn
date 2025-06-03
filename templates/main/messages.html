@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-3 chat-list">
+            <h5>Chats</h5>
+            {% if friends and friends|length > 0 %}
+                {% for friend in friends %}
+                    <div class="chat-list-item" data-friend-id="{{ friend.id }}">
+                        <img src="{{ friend.profile_pic or url_for('static', filename='images/default.jpg') }}" class="profile-pic" alt="Profile">
+                        <span>{{ friend.first_name }} {{ friend.last_name }}</span>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="text-muted">No friends found.</div>
+            {% endif %}
+        </div>
+        <div class="col-md-9 chat-container">
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input">
+                <input type="text" class="form-control" id="message-input" placeholder="Type a message...">
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+    body { background: #f7f9fb; }
+    .chat-list { background: #fff; border-radius: 10px 0 0 10px; padding: 20px; height: 80vh; overflow-y: auto; }
+    .chat-list-item { cursor: pointer; padding: 10px; border-radius: 5px; margin-bottom: 5px; display: flex; align-items: center; transition: background 0.2s; }
+    .chat-list-item.active, .chat-list-item:hover { background: #e9ecef; }
+    .profile-pic { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; margin-right: 10px; }
+    .online-dot { width: 10px; height: 10px; background: #28a745; border-radius: 50%; display: inline-block; margin-left: 6px; }
+    .chat-container { background: #fff; border-radius: 0 10px 10px 0; height: 80vh; display: flex; flex-direction: column; }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 20px; }
+    .chat-input { padding: 15px; border-top: 1px solid #eee; }
+
+    /* Message bubbles styling */
+    .message-bubble {
+        max-width: 70%;
+        margin-bottom: 1rem;
+        clear: both;
+        position: relative;
+    }
+
+    .message-bubble.sent {
+        float: right;
+        margin-left: auto;
+    }
+
+    .message-bubble.received {
+        float: left;
+        margin-right: auto;
+    }
+
+    .message-content {
+        padding: 10px 15px;
+        border-radius: 15px;
+        position: relative;
+        word-wrap: break-word;
+    }
+
+    .message-bubble.sent .message-content {
+        background-color: #0084ff;
+        color: white;
+        border-bottom-right-radius: 5px;
+    }
+
+    .message-bubble.received .message-content {
+        background-color: #e9ecef;
+        color: #000;
+        border-bottom-left-radius: 5px;
+    }
+
+    .message-time {
+        font-size: 0.75rem;
+        color: #999;
+        margin-top: 5px;
+        display: block;
+    }
+
+    .message-bubble.sent .message-time {
+        text-align: right;
+    }
+
+    .message-bubble.received .message-time {
+        text-align: left;
+    }
+</style>
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+<script>
+const currentUserId = "{{ current_user.id }}";
+let selectedFriendId = null;
+
+// Handle friend selection
+const chatListItems = document.querySelectorAll('.chat-list-item');
+chatListItems.forEach(item => {
+    item.addEventListener('click', function() {
+        chatListItems.forEach(i => i.classList.remove('active'));
+        this.classList.add('active');
+        selectedFriendId = this.getAttribute('data-friend-id');
+        loadChatHistory(selectedFriendId);
+    });
+});
+
+function loadChatHistory(friendId) {
+    fetch(`/messages/history/${friendId}`)
+        .then(response => response.json())
+        .then(messages => {
+            const chatMessages = document.getElementById('chat-messages');
+            chatMessages.innerHTML = '';
+            if (messages.error) {
+                chatMessages.innerHTML = `<div class='text-danger'>${messages.error}</div>`;
+                return;
+            }
+            messages.forEach(msg => {
+                const isSent = msg.sender_id == currentUserId;
+                const bubbleClass = isSent ? 'sent' : 'received';
+                chatMessages.innerHTML += `
+                    <div class="message-bubble ${bubbleClass}">
+                        <div class="message-content">${msg.content}</div>
+                        <span class="message-time">${formatTimestamp(msg.timestamp)}</span>
+                    </div>`;
+            });
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        });
+}
+
+function formatTimestamp(timestamp) {
+    const date = new Date(timestamp);
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+}
+
+// Socket.IO for sending/receiving messages
+const socket = io();
+
+// Send message
+const messageInput = document.getElementById('message-input');
+messageInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && selectedFriendId && messageInput.value.trim() !== '') {
+        const msg = messageInput.value.trim();
+        const timestamp = new Date().toISOString();
+        socket.emit('message', {
+            recipient_id: selectedFriendId,
+            content: msg,
+            timestamp: timestamp
+        });
+        messageInput.value = '';
+        loadChatHistory(selectedFriendId); // Instantly update chat after sending
+    }
+});
+
+// Receive message
+socket.on('message', function(data) {
+    // Only show if the message is for the selected friend
+    if ((data.sender_id == selectedFriendId && data.recipient_id == currentUserId) ||
+        (data.sender_id == currentUserId && data.recipient_id == selectedFriendId)) {
+        loadChatHistory(selectedFriendId);
+    }
+});
+
+// On page load, check for ?user=<id> in URL and open that chat
+function getQueryParam(name) {
+    const url = new URL(window.location.href);
+    return url.searchParams.get(name);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const userIdFromQuery = getQueryParam('user');
+    if (userIdFromQuery) {
+        // Find the chat list item with this friend id and trigger click
+        const item = document.querySelector(`.chat-list-item[data-friend-id="${userIdFromQuery}"]`);
+        if (item) {
+            item.click();
+        }
+    }
+});
+</script>
+{% endblock %} 

@@ -16,7 +16,7 @@ from dateutil.parser import parse as parse_date
 from werkzeug.utils import secure_filename
 
 from .forms import PostForm, EditPostForm, CommentForm
-from ..models import Post, VisibilityEnum, Like, User, GenderEnum, Comment, Share
+from ..models import Post, VisibilityEnum, Like, User, GenderEnum, Comment, Share, Message
 from .. import db, security
 
 bp = Blueprint('main', __name__,
@@ -480,15 +480,48 @@ def add_comment(post_id):
 
 
 @bp.route('/message')
-@login_required
 def message():
     return render_template('main/message.html')
+
+@bp.route('/messages')
+@login_required
+def messages():
+    friends = current_user.friends.order_by(User.first_name).all() if hasattr(current_user.friends, 'order_by') else list(current_user.friends)
+    return render_template('main/messages.html', friends=friends)
+
+@bp.route('/messages/history/<int:friend_id>')
+@login_required
+def message_history(friend_id):
+    friend = User.query.get_or_404(friend_id)
+    if not current_user.is_friend(friend):
+        return jsonify({'error': 'Not friends'}), 403
+
+    messages = (
+        db.session.query(Message)
+        .filter(
+            ((Message.sender_id == current_user.id) & (Message.recipient_id == friend_id)) |
+            ((Message.sender_id == friend_id) & (Message.recipient_id == current_user.id))
+        )
+        .order_by(Message.timestamp.asc())
+        .all()
+    )
+    messages_data = [
+        {
+            'id': m.id,
+            'sender_id': m.sender_id,
+            'recipient_id': m.recipient_id,
+            'content': m.content,
+            'timestamp': m.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+        }
+        for m in messages
+    ]
+    return jsonify(messages_data)
 
 @bp.route('/post/<int:post_id>/share', methods=['GET', 'POST'])
 @login_required
 def share_post(post_id):
     post = Post.query.get_or_404(post_id)
-    
+
     if request.method == 'POST':
         # Handle the share creation
         share_content = request.form.get('share_content')
@@ -506,18 +539,18 @@ def share_post(post_id):
             current_app.logger.error(f"Error sharing post: {e}")
             flash('Error sharing post.', 'danger')
         return redirect(url_for('main.dashboard'))
-    
+
     # For GET requests or XHR requests, return the existing share modal data
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         post_url = url_for('main.view_post', post_id=post_id, _external=True)
         return jsonify({'post_url': post_url})
-    
+
     return render_template('main/share_post.html', post=post)
 
 @bp.route('/post/<int:post_id>')
 def view_post(post_id):
     post = Post.query.get_or_404(post_id)
-    
+
     # Check if the user has permission to view this post
     if post.visibility != VisibilityEnum.PUBLIC:
         if not current_user.is_authenticated:
@@ -526,14 +559,14 @@ def view_post(post_id):
             abort(403)
         if post.visibility == VisibilityEnum.FRIENDS and post.author.id not in current_user.friend_ids():
             abort(403)
-    
+
     # Create comment form if user is authenticated
     form = CommentForm() if current_user.is_authenticated else None
-    
+
     # If it's an AJAX request, return just the post content template
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return render_template('main/_post_content.html', post=post, form=form)
-    
+
     # For regular requests, return the full page
     is_share = hasattr(post, 'original_post')
     return render_template('main/view_post.html', post=post, form=form, is_share=is_share)
@@ -542,10 +575,10 @@ def view_post(post_id):
 @login_required
 def like_share(share_id):
     share = Share.query.get_or_404(share_id)
-    
+
     # Check if user already liked this share
     existing_like = Like.query.filter_by(user_id=current_user.id, share_id=share_id).first()
-    
+
     if existing_like:
         # Unlike
         db.session.delete(existing_like)
@@ -555,7 +588,7 @@ def like_share(share_id):
         like = Like(user_id=current_user.id, share_id=share_id)
         db.session.add(like)
         message = 'Share liked!'
-    
+
     try:
         db.session.commit()
         flash(message, 'success')
@@ -563,7 +596,7 @@ def like_share(share_id):
         db.session.rollback()
         current_app.logger.error(f"Error liking/unliking share: {e}")
         flash('Error processing like.', 'danger')
-    
+
     return redirect(request.referrer or url_for('main.dashboard'))
 
 @bp.route('/share/<int:share_id>/comment', methods=['POST'])
@@ -571,17 +604,17 @@ def like_share(share_id):
 def add_comment_to_share(share_id):
     share = Share.query.get_or_404(share_id)
     comment_text = request.form.get('comment_text')
-    
+
     if not comment_text:
         flash('Comment cannot be empty.', 'danger')
         return redirect(request.referrer or url_for('main.dashboard'))
-    
+
     comment = Comment(
         content=comment_text,
         user_id=current_user.id,
         share_id=share_id
     )
-    
+
     try:
         db.session.add(comment)
         db.session.commit()
@@ -590,5 +623,5 @@ def add_comment_to_share(share_id):
         db.session.rollback()
         current_app.logger.error(f"Error adding comment to share: {e}")
         flash('Error adding comment.', 'danger')
-    
+
     return redirect(request.referrer or url_for('main.dashboard'))

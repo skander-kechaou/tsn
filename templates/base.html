@@ -2,49 +2,317 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{{ title if title else "TSN Platform" }}</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{{ title if title else "Nest" }}</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <style>
+        /* Navbar styles */
+        .navbar {
+            padding: 0.5rem 1rem;
+        }
+
+        .navbar-nav .nav-link {
+            padding: 0.5rem 1rem;
+            color: #1a1a1a;
+        }
+
+        .navbar-nav .nav-link.active {
+            color: #007bff;
+        }
+
+        .navbar-nav .nav-link i {
+            margin-right: 5px;
+            font-size: 1.1em;
+        }
+
+        /* Notification styles */
+        #notificationsDropdown {
+            font-size: 1.2em;
+            padding: 0.5rem;
+            color: #1a1a1a;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        #notificationsDropdown i {
+            color: #333;
+            font-size: 2rem;
+            vertical-align: middle;
+        }
+
+        .notification-badge {
+            font-size: 0.7rem !important;
+            padding: 0.25rem 0.4rem !important;
+            transform: translate(25%, -25%) !important;
+            top: 0 !important;
+            right: 0 !important;
+            min-width: 1rem;
+            height: 1rem;
+            line-height: 0.5;
+            text-align: center;
+        }
+
+        .notification-dropdown {
+            min-width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 0;
+            position: absolute;
+            right: 0;
+            left: auto;
+            transform: translateX(0);
+        }
+
+        .notification-dropdown .dropdown-header {
+            background-color: #f8f9fa;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .notification-dropdown .dropdown-item {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #f1f1f1;
+            white-space: normal;
+        }
+
+        .notification-dropdown .dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .notification-dropdown .dropdown-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        /* Custom scrollbar for notification dropdown */
+        .notification-dropdown::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .notification-dropdown::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+
+        .notification-dropdown::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
+        }
+
+        .notification-dropdown::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Profile dropdown */
+        #navbarDropdown {
+            padding: 0.5rem;
+            color: #1a1a1a;
+        }
+
+        #navbarDropdown i {
+            margin-right: 5px;
+            font-size: 1.2em;
+        }
+
+        /* Ensure dropdowns work on hover */
+        @media (min-width: 992px) {
+            .dropdown:hover .dropdown-menu {
+                display: block;
+            }
+        }
+
+        /* Position the notification bell icon container */
+        .nav-item.dropdown.me-3 {
+            position: relative;
+        }
+
+        /* Ensure dropdown menu is positioned relative to the bell icon */
+        #notificationsDropdown {
+            position: relative;
+        }
+
+        /* Adjust dropdown position */
+        .dropdown-menu-end {
+            right: 0;
+            left: auto;
+        }
+    </style>
+    <link rel="shortcut icon" href="{{ url_for('static', filename='images/logo.ico') }}" type="image/x-icon">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/logo.png') }}">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <a class="navbar-brand" href="{{ url_for('main.index') }}">TSN Platform</a>
-        <div class="collapse navbar-collapse">
-            <ul class="navbar-nav mr-auto">
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+    {# Navbar Brand with Logo - Always on the far left #}
+    <a class="navbar-brand"
+       href="{{ url_for('main.index') if not current_user.is_authenticated else url_for('main.dashboard') }}">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="TSN Platform Logo" height="40"
+             class="d-inline-block align-top">
+        Nest
+    </a>
+
+    {# Navbar Toggler Button #}
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav"
+            aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+    </button>
+
+    {# Collapsible Navbar Content #}
+    <div class="collapse navbar-collapse" id="navbarNav">
+
+        {# Centered Links (Dashboard and Users) - only for authenticated users #}
+        {# This UL will be pushed to the center by the empty ULs on either side in a flex container, #}
+        {# or more reliably by mx-auto if it's the only "flexible" item in the middle. #}
+        {% if current_user.is_authenticated %}
+            <ul class="navbar-nav mx-auto"> {# mx-auto will center this specific ul #}
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('main.index') }}">Home</a>
-                </li>
-                {% if current_user.is_authenticated %}
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('main.dashboard') }}">Dashboard</a>
+                    <a class="nav-link" href="{{ url_for('main.dashboard') }}">
+                        <i class="fas fa-home"></i> Treehouse
+                    </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('profile.view_profile', username=current_user.username) }}">Profile</a>
+                    <a class="nav-link" href="{{ url_for('main.users') }}">
+                        <i class="fas fa-users"></i> Birdies
+                    </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('user.logout') }}">Logout</a>
-                </li>
-                {% else %}
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('user.login') }}">Login</a>
+                    <a class="nav-link" href="{{ url_for('profile.view_friends', username=current_user.username) }}">
+                        <i class="fas fa-address-book"></i> Nestlings
+                    </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('user.register') }}">Register</a>
+                    <a class="nav-link" href="{{ url_for('main.messages') }}">
+                        <i class="fas fa-comments"></i> Chirps
+                    </a>
                 </li>
-                {% endif %}
             </ul>
-        </div>
-    </nav>
-    <div class="container mt-3">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} mt-2">{{ message }}</div>
-                {% endfor %}
+        {% else %}
+            {# This empty ul with mx-auto acts as a spacer to help push login/register to the right #}
+            {# if there are no centered items. #}
+            <ul class="navbar-nav mx-auto"></ul>
+        {% endif %}
+
+
+        {# Right-Aligned Links (Login/Register or User Profile Dropdown) #}
+        {# This ul will be pushed to the right because the centered one has mx-auto #}
+        {# or because there's effectively nothing between it and the centered block. #}
+        <ul class="navbar-nav"> {# No need for ml-auto if the centered block uses mx-auto correctly #}
+            {% if current_user.is_authenticated %}
+                <li class="nav-item dropdown me-3">
+                    <a class="nav-link" href="#" id="notificationsDropdown" role="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-haspopup="true" aria-expanded="false">
+                        <i class="fas fa-bell"></i>
+                        <span class="position-absolute notification-badge badge badge-danger" id="notif-badge" style="display: none;">0</span>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-end notification-dropdown" id="notif-dropdown-menu" aria-labelledby="notificationsDropdown">
+                        <div class="dropdown-header">
+                            <h6 class="m-0">Chimes</h6>
+                        </div>
+                        <div class="dropdown-divider"></div>
+                        <div id="notifications-container">
+                            <span class="dropdown-item text-muted" id="notif-empty">No new chimes</span>
+                        </div>
+                    </div>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownMenuLink" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <i class="fas fa-user-circle"></i>
+                        {{ current_user.username }}
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdownMenuLink">
+                        <a class="dropdown-item"
+                           href="{{ url_for('profile.view_profile', username=current_user.username) }}">
+                            <i class="fas fa-user"></i> Nest
+                        </a>
+                        <a class="dropdown-item"
+                           href="{{ url_for('profile.edit_profile', username=current_user.username) }}">
+                            <i class="fas fa-edit"></i> Arrange Nest
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item" href="{{ url_for('security.logout') }}">
+                            <i class="fas fa-sign-out-alt"></i> Fly Away
+                        </a>
+                    </div>
+                </li>
+            {% else %}
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('security.login') }}">
+                        <i class="fas fa-sign-in-alt"></i> Fly In
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('security.register') }}">
+                        <i class="fas fa-user-plus"></i> Nest Up
+                    </a>
+                </li>
             {% endif %}
-        {% endwith %}
-        {% block content %}{% endblock %}
+        </ul>
     </div>
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</nav>
+
+<div class="container mt-3" style="max-width: 1500px;">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} mt-2">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+{% block scripts %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Socket.IO with error handling
+            const socket = io({
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000
+            });
+
+            socket.on('connect', () => {
+                console.log('Socket.IO connected successfully');
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('Socket.IO connection error:', error);
+            });
+
+            socket.on('disconnect', (reason) => {
+                console.log('Socket.IO disconnected:', reason);
+            });
+
+            // Initialize all dropdowns
+            var dropdowns = document.querySelectorAll('.dropdown-toggle');
+            dropdowns.forEach(function(dropdown) {
+                new bootstrap.Dropdown(dropdown, {
+                    autoClose: dropdown.getAttribute('data-bs-auto-close') || true
+                });
+            });
+
+            // Rest of your existing script...
+            const mediaUploadInput = document.getElementById('actualMediaUploadField');
+            const selectedFileNameDisplay = document.getElementById('selectedFileName');
+
+            if (mediaUploadInput && selectedFileNameDisplay) {
+                mediaUploadInput.addEventListener('change', function() {
+                    if (this.files && this.files.length > 0) {
+                        selectedFileNameDisplay.textContent = 'Selected: ' + this.files[0].name;
+                    } else {
+                        selectedFileNameDisplay.textContent = '';
+                    }
+                });
+            }
+        });
+    </script>
+{% endblock %}
 </body>
 </html>

@@ -1,15 +1,149 @@
 {% extends "base.html" %}
+{% from "security/_macros.html" import render_field_with_errors, render_field %}
+
 {% block content %}
-  <h1>Edit Profile</h1>
-  <form method="POST">
-    {{ form.hidden_tag() }}
-    <div class="form-group">
-      {{ form.username.label(class="form-control-label") }}
-      {{ form.username(class="form-control") }}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-7">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h3 class="mb-0 center">Arrange Your Nest</h3>
+                </div>
+                <div class="card-body">
+                    {# enctype is crucial for file uploads #}
+                    <form method="POST" action="{{ url_for('profile.edit_profile', username=current_user.username) }}" enctype="multipart/form-data" id="editProfileForm">
+                        {{ form.hidden_tag() }} {# CSRF token #}
+
+                        {# Profile Picture Section - Modified for Clickable Upload #}
+                        <div class="form-group text-center mb-4">
+                            <label for="{{ form.profile_pic_upload.id }}" style="cursor: pointer; display: inline-block; position: relative;">
+                                <img src="{{ url_for('static', filename=current_user.profile_pic if current_user.profile_pic else 'images/default_profile.jpg') }}"
+                                     alt="Profile Picture"
+                                     id="profileImagePreview"
+                                     class="img-thumbnail rounded-circle"
+                                     style="width: 150px; height: 150px; object-fit: cover;">
+                                <div class="profile-pic-edit-overlay">
+                                    {# You can use an icon here, e.g., Font Awesome camera icon #}
+                                    <span>Change</span>
+                                </div>
+                            </label>
+                            {# Hidden File Input - This is what actually handles the file selection #}
+                            <div style="display: none;">
+                                {{ form.profile_pic_upload(id="profilePicUploadInput") }}
+                            </div>
+                            {% if form.profile_pic_upload.errors %}
+                                <div class="invalid-feedback d-block text-center mt-2">
+                                    {% for error in form.profile_pic_upload.errors %}
+                                        <span>{{ error }}</span><br>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            <small class="form-text text-muted text-center mt-1">Click image to change.</small>
+                        </div>
+
+
+                        <fieldset class="form-group mb-3">
+                            <legend class="border-bottom pb-2 mb-3">Account Information</legend>
+                            {{ render_field_with_errors(form.username, class="form-control", readonly="readonly") }}
+                            {{ render_field_with_errors(form.email, class="form-control", readonly="readonly") }}
+                        </fieldset>
+
+                        <fieldset class="form-group mb-3">
+                            <legend class="border-bottom pb-2 mb-3">Personal Details</legend>
+                            {{ render_field_with_errors(form.first_name, class="form-control") }}
+                            {{ render_field_with_errors(form.last_name, class="form-control") }}
+                            {{ render_field_with_errors(form.phone, class="form-control") }}
+
+                            <div class="form-group">
+                                {{ form.date_birth.label(class="form-label") }}
+                                {{ form.date_birth(class="form-control", type="date") }}
+                                {% if form.date_birth.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.date_birth.errors %}<span>{{ error }}</span>{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group">
+                                {{ form.gender.label(class="form-label") }}
+                                {{ form.gender(class="form-control") }} {# Use form-control for BS4, form-select for BS5 #}
+                                {% if form.gender.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.gender.errors %}<span>{{ error }}</span>{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group">
+                                {{ form.biography.label(class="form-label") }}
+                                {{ form.biography(class="form-control") }} {# Use form-control for BS4, form-select for BS5 #}
+                                {% if form.biography.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.biography.errors %}<span>{{ error }}</span>{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group">
+                                {{ form.location.label(class="form-label") }}
+                                {{ form.location(class="form-control") }} {# Use form-control for BS4, form-select for BS5 #}
+                                {% if form.location.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.location.errors %}<span>{{ error }}</span>{% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </fieldset>
+
+                        <div class="form-group mt-4">
+                            {{ form.submit(class="btn btn-primary btn-block") }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
     </div>
-    <!-- Add additional fields as needed -->
-    <div class="form-group">
-      {{ form.submit(class="btn btn-primary") }}
-    </div>
-  </form>
+</div>
+
+{# Add JavaScript at the end of the block or in a separate JS file linked in base.html #}
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const profilePicUploadInput = document.getElementById('profilePicUploadInput');
+    const profileImagePreview = document.getElementById('profileImagePreview');
+    const profileImageLabel = document.querySelector('label[for="{{ form.profile_pic_upload.id }}"]'); // Get the label
+
+    // When the styled label/image is clicked, trigger the hidden file input
+    if (profileImageLabel && profilePicUploadInput) {
+        profileImageLabel.addEventListener('click', function(event) {
+            // We only want to trigger the input if the click wasn't on the input itself
+            // (though it's hidden, this is a good practice if it were partially visible).
+            // Since the label wraps the image and an overlay, clicking them should trigger this.
+            // event.preventDefault(); // Not strictly needed if input is hidden and label 'for' is correct
+            profilePicUploadInput.click();
+        });
+    }
+
+    // When a file is selected in the hidden input, update the preview and optionally submit form
+    if (profilePicUploadInput && profileImagePreview) {
+        profilePicUploadInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    profileImagePreview.src = e.target.result;
+                }
+                reader.readAsDataURL(file);
+
+                // Optional: Automatically submit the form when a new picture is chosen
+                // Uncomment the line below if you want this behavior.
+                // Be cautious with auto-submit, it might not always be desired UX.
+                // document.getElementById('editProfileForm').submit();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
+
 {% endblock %}

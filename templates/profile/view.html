@@ -1,7 +1,256 @@
 {% extends "base.html" %}
+{% from "main/_post_card.html" import render_post_card %}
+
 {% block content %}
-  <h1>Profile of {{ user.username }}</h1>
-  <p>Username: {{ user.username }}</p>
-  <!-- Additional profile details can be added here -->
-  <a href="{{ url_for('profile.edit_profile') }}" class="btn btn-primary">Edit Profile</a>
+    <div class="container mt-4 profile-page">
+        {# Profile Header Section - User's basic info, profile pic, bio, friend button etc. #}
+        <div class="profile-header-card card shadow-sm mb-4">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    {# Profile Picture Column #}
+                    <div class="col-md-3 text-center mb-3 mb-md-0">
+                        <img src="
+
+
+                                {{ url_for('static', filename=profile_user.profile_pic) if profile_user.profile_pic.startswith('images/') else url_for('main.uploaded_profile_pic', filename=profile_user.profile_pic.split('/')[-1]) if profile_user.profile_pic else url_for('static', filename='images/default_profile.jpg') }}"
+                             alt="{{ profile_user.username }}'s profile picture"
+                             class="img-fluid rounded-circle profile-pic-large">
+                    </div>
+
+                    {# Info and Actions Column #}
+                    <div class="col-md-9">
+                        <div class="d-md-flex justify-content-between align-items-start mb-2">
+                            <div class="profile-identity">
+                                <h1 class="profile-full-name mb-0">{{ profile_user.first_name|capitalize }} {{ profile_user.last_name|capitalize }}</h1>
+                                <p class="profile-username text-muted">@{{ profile_user.username }}</p>
+                            </div>
+                            <div class="profile-actions mt-2 mt-md-0">
+                                {% if current_user.is_authenticated %}
+                                    {% if current_user.id == profile_user.id %} {# Safer to compare IDs #}
+                                        <a href="{{ url_for('profile.edit_profile', username=profile_user.username) }}"
+                                           class="btn btn-outline-secondary btn-sm"><i
+                                                class="fas fa-pencil-alt fa-fw"></i> Arrange Nest</a>
+                                    {% else %}
+                                        <div class="profile-actions mt-2 mt-md-0">
+                                            {% if current_user.is_authenticated %}
+                                                {% if current_user.id == profile_user.id %}
+                                                    <a href="{{ url_for('profile.edit_profile', username=profile_user.username) }}"
+                                                       class="btn btn-outline-secondary btn-sm"><i
+                                                            class="fas fa-pencil-alt fa-fw"></i> Arrange Nest</a>
+                                                {% else %}
+                                                    {# Use the is_friend method from your User model #}
+                                                    {% if current_user.is_friend(profile_user) %}
+                                                        <form action="{{ url_for('profile.unfriend_route', username=profile_user.username) }}"
+                                                              method="POST" class="d-inline-block">
+                                                            <input type="hidden" name="csrf_token"
+                                                                   value="{{ csrf_token() }}">
+                                                            <button type="submit" class="btn btn-secondary btn-sm"><i
+                                                                    class="fas fa-user-minus fa-fw"></i> Unflock
+                                                            </button>
+                                                        </form>
+                                                    {% else %}
+                                                        <form action="{{ url_for('profile.add_friend_route', username=profile_user.username) }}"
+                                                              method="POST" class="d-inline-block">
+                                                            <input type="hidden" name="csrf_token"
+                                                                   value="{{ csrf_token() }}">
+                                                            <button type="submit" class="btn btn-primary btn-sm" onclick="triggerFriendAdded()"><i
+                                                                    class="fas fa-user-plus fa-fw"></i> Flock
+                                                            </button>
+                                                        </form>
+                                                    {% endif %}
+                                                    <a href="{{ url_for('main.messages', user=profile_user.id) }}" class="btn btn-outline-primary btn-sm ml-2"><i
+                                                            class="fas fa-envelope fa-fw"></i> Message</a>
+                                                {% endif %}
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        {% if profile_user.biography %}
+                            <p class="profile-bio mb-3">{{ profile_user.biography }}</p>
+                        {% else %}
+                            <p class="profile-bio mb-3 text-muted"><em>No biography provided.</em></p>
+                        {% endif %}
+
+                        <div class="profile-meta-info d-flex flex-wrap">
+                            {% if profile_user.location %}
+                                <div class="meta-item mr-3 mb-1"><i
+                                        class="fas fa-map-marker-alt fa-fw text-muted-custom"></i> {{ profile_user.location }}
+                                </div>
+                            {% endif %}
+                            <div class="meta-item mr-3 mb-1"><i class="fas fa-calendar-alt fa-fw text-muted-custom"></i>
+                                Joined {{ profile_user.date_joined.strftime('%B %Y') if profile_user.date_joined else 'N/A' }}
+                            </div>
+                            {% if profile_user.date_birth and profile_user.date_birth.year > 1900 %}
+                                {# Only show if not the placeholder date #}
+                                <div class="meta-item mb-1"><i class="fas fa-birthday-cake fa-fw text-muted-custom"></i>
+                                    Born {{ profile_user.date_birth.strftime('%B %d, %Y') }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {# End row #}
+
+                {# Profile Stats - Using basic counts that should work #}
+                <hr class="my-3">
+                <div class="profile-stats d-flex justify-content-around text-center pb-2">
+                    <a href="{{ url_for('profile.view_profile', username=profile_user.username, view_type='posts') }}"
+                       class="stat-item text-decoration-none">
+                        <strong class="d-block">{{ profile_user.posts.count() }}</strong>
+                        <span class="text-muted">Hatches</span>
+                    </a>
+                    <a href="{{ url_for('profile.view_friends', username=profile_user.username) }}"
+                       class="stat-item text-decoration-none">
+                        <strong class="d-block">
+                            {% if profile_user.friends %}
+                                {{ profile_user.friend_count() }}
+                            {% else %}
+                                0
+                            {% endif %}
+                        </strong>
+                        <span class="text-muted">Nestlings</span>
+                    </a>
+                    <a href="{{ url_for('profile.view_profile', username=profile_user.username, view_type='likes') }}"
+                       class="stat-item text-decoration-none">
+                        <strong class="d-block">{{ profile_user.likes_given.count() }}</strong>
+                        <span class="text-muted">Seeds Given</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        {# Tab Navigation #}
+        <ul class="nav nav-pills nav-fill mb-4 profile-nav-tabs">
+            <li class="nav-item">
+                <a class="nav-link {% if active_tab == 'posts' %}active{% endif %}"
+                   href="{{ url_for('profile.view_profile', username=profile_user.username, view_type='posts') }}">
+                    <i class="fas fa-th-list"></i> Hatches
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if active_tab == 'likes' %}active{% endif %}"
+                   href="{{ url_for('profile.view_profile', username=profile_user.username, view_type='likes') }}">
+                    <i class="fas fa-heart"></i> Seeds
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if active_tab == 'shares' %}active{% endif %}"
+                   href="{{ url_for('profile.view_profile', username=profile_user.username, view_type='shares') }}">
+                    <i class="fas fa-retweet"></i> Echoes
+                </a>
+            </li>
+            {# Add other tabs like "Friends", "Photos" etc. as needed #}
+        </ul>
+
+        {# Tab Content Area #}
+        <div class="tab-content">
+            {# --- POSTS TAB CONTENT --- #}
+            {% if active_tab == 'posts' %}
+                <div class="tab-pane fade show active" id="profile-posts" role="tabpanel">
+                    {% if items %}
+                        {% for post_item in items %} {# items here are actual Post objects #}
+                            {# Use your existing post card rendering logic/macro #}
+                            {{ render_post_card(post_item, current_user_for_macro=current_user) }}
+                            {# Assuming you have a macro #}
+                            {# Or manually render the post card structure here #}
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-center text-muted">This user hasn't made any posts yet.</p>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            {# --- LIKES TAB CONTENT --- #}
+            {% if active_tab == 'likes' %}
+                <div class="tab-pane fade show active" id="profile-likes" role="tabpanel">
+                    {% if items %}
+                        {% for like_item in items %} {# items here are Like objects #}
+                            {% if like_item.liked_post_object %} {# Or like_item.liked_object and check type #}
+                                {# Render the post that was liked #}
+                                {{ render_post_card(like_item.liked_post_object, current_user_for_macro=current_user) }}
+                                {# {% elif like_item.liked_comment_object %} #}
+                                {# Render the comment that was liked (you'd need a comment card macro/style) #}
+                                {# <p>Liked comment: {{ like_item.liked_comment_object.content }} on post by ... </p> #}
+                                {# {% elif like_item.liked_share_object %} #}
+                                {# Render the share that was liked (you'd need a share card macro/style) #}
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-center text-muted">This user hasn't liked any content yet.</p>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            {# --- SHARES TAB CONTENT --- #}
+            {% if active_tab == 'shares' %}
+                <div class="tab-pane fade show active" id="profile-shares" role="tabpanel">
+                    {% if items %}
+                        {% for share_item in items %} {# items here are Share objects #}
+                            {# Render the shared post, possibly with the user's share content #}
+                            <div class="card post-card shared-post-card mb-4 shadow-sm">
+                                <div class="card-header bg-white border-0 py-2">
+                                    <small class="text-muted">
+                                        <a href="{{ url_for('profile.view_profile', username=share_item.author.username) }}"
+                                           class="font-weight-bold text-dark">{{ share_item.author.username }}</a>
+                                        shared a post · {{ share_item.timestamp.strftime('%b %d, %Y') }}
+                                    </small>
+                                </div>
+                                {% if share_item.content %}
+                                    <div class="card-body py-2" style="background-color: #f9f9f9;">
+                                        <p class="mb-0 font-italic">"{{ share_item.content }}"</p>
+                                    </div>
+                                {% endif %}
+                                {# Render the original post content (nested post card) #}
+                                {{ render_post_card(share_item.original_post, current_user_for_macro=current_user, is_shared=True) }}
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-center text-muted">This user hasn't shared any posts yet.</p>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            {# Pagination for the active tab's content #}
+            {% if pagination and pagination.pages > 1 %}
+                <nav aria-label="Page navigation" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                            <a class="page-link"
+                               href="{{ url_for('profile.view_profile', username=profile_user.username, view_type=active_tab, page=pagination.prev_num) if pagination.has_prev else '#' }}">Previous</a>
+                        </li>
+                        {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                            {% if page_num %}
+                                {% if pagination.page == page_num %}
+                                    <li class="page-item active"><a class="page-link"
+                                                                    href="{{ url_for('profile.view_profile', username=profile_user.username, view_type=active_tab, page=page_num) }}">{{ page_num }}</a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item"><a class="page-link"
+                                                             href="{{ url_for('profile.view_profile', username=profile_user.username, view_type=active_tab, page=page_num) }}">{{ page_num }}</a>
+                                    </li>
+                                {% endif %}
+                            {% else %}
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            {% endif %}
+                        {% endfor %}
+                        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                            <a class="page-link"
+                               href="{{ url_for('profile.view_profile', username=profile_user.username, view_type=active_tab, page=pagination.next_num) if pagination.has_next else '#' }}">Next</a>
+                        </li>
+                    </ul>
+                </nav>
+            {% endif %}
+
+        </div>
+        {# End Tab Content Area #}
+    </div> {# End Container #}
+
+    <script>
+    function triggerFriendAdded() {
+        // Dispatch a custom event when a friend is added
+        document.dispatchEvent(new Event('friendAdded'));
+    }
+    </script>
 {% endblock %}

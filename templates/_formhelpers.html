@@ -1,0 +1,25 @@
+{# templates/_formhelpers.html #}
+{% macro render_field(field, label_visible=True, class="", placeholder="", rows="", type="") %} {# Explicitly list common attributes you might pass #}
+  <div class="form-group">
+    {% if label_visible and field.label %}
+      {{ field.label(class="form-label") }} {# Assuming form-label is a Bootstrap class or your custom one #}
+    {% endif %}
+
+    {# Construct a dictionary of HTML attributes to pass to the field #}
+    {% set field_kwargs = {} %}
+    {% if class %}{% set _ = field_kwargs.update({'class': class}) %}{% endif %}
+    {% if placeholder %}{% set _ = field_kwargs.update({'placeholder': placeholder}) %}{% endif %}
+    {% if rows %}{% set _ = field_kwargs.update({'rows': rows}) %}{% endif %}
+    {% if type %}{% set _ = field_kwargs.update({'type': type}) %}{% endif %}
+
+    {{ field(**field_kwargs) }} {# This renders the WTForms field with the specified HTML attributes #}
+
+    {% if field.errors %}
+      <div class="invalid-feedback d-block"> {# d-block to ensure errors are shown with Bootstrap #}
+        {% for error in field.errors %}
+          <span>{{ error }}</span><br>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+{% endmacro %}

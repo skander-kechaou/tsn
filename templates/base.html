@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ title if title else "Nest" }}</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -270,6 +271,25 @@
 {% block scripts %}
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Socket.IO with error handling
+            const socket = io({
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000
+            });
+
+            socket.on('connect', () => {
+                console.log('Socket.IO connected successfully');
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('Socket.IO connection error:', error);
+            });
+
+            socket.on('disconnect', (reason) => {
+                console.log('Socket.IO disconnected:', reason);
+            });
+
             // Initialize all dropdowns
             var dropdowns = document.querySelectorAll('.dropdown-toggle');
             dropdowns.forEach(function(dropdown) {
@@ -293,6 +313,6 @@
             }
         });
     </script>
-{% endblock scripts %}
+{% endblock %}
 </body>
 </html>

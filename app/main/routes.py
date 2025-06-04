@@ -4,7 +4,6 @@ import uuid
 from datetime import datetime, date
 import os
 from urllib.parse import urlencode
-
 from sqlalchemy import or_, literal, text
 from flask_dance.consumer import oauth_authorized, oauth_error
 from flask_dance.contrib.google import google  # The proxy for the current Google session
@@ -14,9 +13,9 @@ from flask_login import LoginManager, login_user, logout_user, current_user, log
 from flask_security.utils import hash_password  # Or other utils
 from dateutil.parser import parse as parse_date
 from werkzeug.utils import secure_filename
-
+from ..events import send_notification
 from .forms import PostForm, EditPostForm, CommentForm
-from ..models import Post, VisibilityEnum, Like, User, GenderEnum, Comment, Share, Message
+from ..models import Post, VisibilityEnum, Like, User, GenderEnum, Comment, Share, Message, Notification
 from .. import db, security
 
 bp = Blueprint('main', __name__,
@@ -443,38 +442,67 @@ def like_post(post_id):
     post = Post.query.get_or_404(post_id)
     existing_like = Like.query.filter_by(user_id=current_user.id, post_id=post.id).first()
 
-    if existing_like:
-        db.session.delete(existing_like)
-    else:
-        like = Like(user_id=current_user.id, post_id=post.id)
-        db.session.add(like)
+    try:
+        if existing_like:
+            db.session.delete(existing_like)
+        else:
+            like = Like(user_id=current_user.id, post_id=post.id)
+            db.session.add(like)
+            
+            # Send notification to post author if it's not their own post
+            if post.user_id != current_user.id:
+                notification_message = f"{current_user.username} seeded your hatch"
+                notification_link = f"/post/{post.id}"
+                send_notification(
+                    user_id=post.user_id,
+                    message=notification_message,
+                    notification_type='like',
+                    link=notification_link
+                )
 
-    db.session.commit()
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error liking/unliking post: {e}")
+        flash('Error processing like.', 'danger')
+
     return redirect(request.referrer or url_for('main.dashboard'))
 
 @bp.route('/post/<int:post_id>/comment', methods=['POST'])
 @login_required
 def add_comment(post_id):
     post = Post.query.get_or_404(post_id)
-    form = CommentForm()
+    comment_text = request.form.get('comment_text')
 
-    if form.validate_on_submit():
-        comment_content = form.comment_text.data
-        new_comment = Comment(
-            content=comment_content,
-            user_id=current_user.id, # Or current_user._get_current_object().id
-            post_id=post.id
+    if not comment_text:
+        flash('Comment cannot be empty.', 'danger')
+        return redirect(request.referrer or url_for('main.dashboard'))
+
+    new_comment = Comment(
+        content=comment_text,
+        user_id=current_user.id,
+        post_id=post.id
+    )
+    db.session.add(new_comment)
+    
+    # Send notification to post author if it's not their own comment
+    if post.user_id != current_user.id:
+        notification_message = f"{current_user.username} peeped your hatch: {comment_text[:30]}"
+        notification_link = f"/post/{post.id}"
+        send_notification(
+            user_id=post.user_id,
+            message=notification_message,
+            notification_type='comment',
+            link=notification_link
         )
-        db.session.add(new_comment)
+        
+    try:
         db.session.commit()
         flash('Your comment has been added.', 'success')
-    else:
-        if form.errors:
-            for field, errors in form.errors.items():
-                for error in errors:
-                    flash(f"Error in {getattr(form, field).label.text}: {error}", 'danger')
-        else:
-            flash('Could not post comment.', 'danger')
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error adding comment: {e}")
+        flash('Error adding comment.', 'danger')
 
     return redirect(request.referrer or url_for('main.dashboard') + f"#post-{post.id}")
 
@@ -532,6 +560,17 @@ def share_post(post_id):
         )
         db.session.add(new_share)
         try:
+            # Send notification to post author if it's not their own share
+            if post.user_id != current_user.id:
+                notification_message = f"{current_user.username} echoed your hatch"
+                notification_link = f"/post/{post.id}"
+                send_notification(
+                    user_id=post.user_id,
+                    message=notification_message,
+                    notification_type='share',
+                    link=notification_link
+                )
+            
             db.session.commit()
             flash('Post shared successfully!', 'success')
         except Exception as e:
@@ -635,3 +674,93 @@ def recommendations():
     return render_template('main/recommendations.html',
                          friend_recommendations=friend_recommendations,
                          popular_posts=popular_posts)
+
+@bp.route('/api/friend-recommendations')
+@login_required
+def get_friend_recommendations():
+    recommendations = current_user.get_friend_recommendations(limit=5)
+    return jsonify([{
+        'id': user.id,
+        'username': user.username,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'profile_pic': user.profile_pic if user.profile_pic else 'images/default.jpg'
+    } for user in recommendations])
+
+@bp.route('/api/notifications')
+@login_required
+def get_notifications():
+    try:
+        # Log the current user for debugging
+        current_app.logger.info(f"Fetching notifications for user {current_user.id}")
+        
+        # Check if the user exists
+        if not current_user:
+            current_app.logger.error("No authenticated user found")
+            return jsonify({'error': 'User not authenticated'}), 401
+            
+        # Check database connection
+        try:
+            db.session.execute(text('SELECT 1'))
+        except Exception as db_conn_error:
+            current_app.logger.error(f"Database connection error: {str(db_conn_error)}")
+            return jsonify({'error': 'Database connection error'}), 500
+            
+        # Query notifications with error checking
+        try:
+            notifications = Notification.query.filter_by(user_id=current_user.id)\
+                .order_by(Notification.timestamp.desc())\
+                .limit(50)\
+                .all()
+            current_app.logger.info(f"Found {len(notifications)} notifications")
+            
+            # Convert to dict with error checking
+            notifications_data = []
+            for notification in notifications:
+                try:
+                    notifications_data.append(notification.to_dict())
+                except Exception as notif_error:
+                    current_app.logger.error(f"Error processing notification {notification.id}: {str(notif_error)}")
+                    continue  # Skip problematic notifications
+                    
+            return jsonify(notifications_data)
+            
+        except Exception as db_error:
+            current_app.logger.error(f"Database query error: {str(db_error)}")
+            return jsonify({'error': 'Error querying notifications'}), 500
+            
+    except Exception as e:
+        current_app.logger.error(f"Unexpected error in get_notifications: {str(e)}", exc_info=True)
+        return jsonify({'error': 'An unexpected error occurred'}), 500
+
+@bp.route('/api/notifications/<int:notification_id>/read', methods=['POST'])
+@login_required
+def mark_notification_read(notification_id):
+    try:
+        # Log the request for debugging
+        current_app.logger.info(f"Marking notification {notification_id} as read for user {current_user.id}")
+        
+        # Validate notification exists and belongs to user
+        notification = Notification.query.filter_by(
+            id=notification_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not notification:
+            current_app.logger.warning(f"Notification {notification_id} not found or unauthorized")
+            return jsonify({'error': 'Notification not found or unauthorized'}), 404
+        
+        # Update read status
+        try:
+            notification.is_read = True
+            db.session.commit()
+            current_app.logger.info(f"Successfully marked notification {notification_id} as read")
+            return jsonify(notification.to_dict())
+        except Exception as db_error:
+            db.session.rollback()
+            current_app.logger.error(f"Database error marking notification as read: {str(db_error)}")
+            return jsonify({'error': 'Failed to update notification status'}), 500
+            
+    except Exception as e:
+        current_app.logger.error(f"Error marking notification as read: {str(e)}", exc_info=True)
+        return jsonify({'error': 'An unexpected error occurred'}), 500

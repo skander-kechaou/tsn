@@ -104,11 +104,4 @@ def handle_stop_typing(data):
     }, room=f'user_{recipient_id}')
 
 def init_socketio_events(socketio_instance):
-    """Initialize all socket event handlers
-    
-    Args:
-        socketio_instance: The SocketIO instance to initialize events for
-    """
-    # The event handlers are already registered via decorators
-    # This function exists to provide a clear initialization point
     pass

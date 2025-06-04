@@ -123,13 +123,11 @@
                     <i class="far fa-comment"></i> Peep
                     <span class="badge badge-light ml-1">{{ post.comment_count() }}</span>
                 </button>
-                <form method="POST" action="#" class="d-inline-block share-form">
-                    {# TODO: url_for('main.share_post', post_id=post.id) #}
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-link text-muted p-1">
-                        <i class="fas fa-retweet"></i> Echo
-                    </button>
-                </form>
+                <button class="btn btn-link text-muted p-1"
+                        type="button"
+                        onclick="sharePost({{ post.id }})">
+                    <i class="fas fa-share"></i> Echo
+                </button>
             </div>
 
             <div class="collapse" id="comments-post-{{ post.id~'_macro' }}">

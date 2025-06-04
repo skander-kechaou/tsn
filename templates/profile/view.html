@@ -53,7 +53,7 @@
                                                               method="POST" class="d-inline-block">
                                                             <input type="hidden" name="csrf_token"
                                                                    value="{{ csrf_token() }}">
-                                                            <button type="submit" class="btn btn-primary btn-sm"><i
+                                                            <button type="submit" class="btn btn-primary btn-sm" onclick="triggerFriendAdded()"><i
                                                                     class="fas fa-user-plus fa-fw"></i> Flock
                                                             </button>
                                                         </form>
@@ -246,4 +246,11 @@
         </div>
         {# End Tab Content Area #}
     </div> {# End Container #}
+
+    <script>
+    function triggerFriendAdded() {
+        // Dispatch a custom event when a friend is added
+        document.dispatchEvent(new Event('friendAdded'));
+    }
+    </script>
 {% endblock %}

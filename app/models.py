@@ -1,6 +1,7 @@
 # app/models.py
 from enum import Enum
 
+from flask import current_app
 from sqlalchemy import CheckConstraint
 
 from .extensions import db
@@ -99,6 +100,17 @@ class User(db.Model, UserMixin):
         if not self.is_friend(user_to_add):
             self.friends.append(user_to_add)
             user_to_add.friends.append(self)  # mutual friendship
+            
+            # Send notification to the user being added
+            from .events import send_notification
+            notification_message = f"{self.username} added you to their flock!"
+            notification_link = f"/profile/{self.username}"
+            send_notification(
+                user_id=user_to_add.id,
+                message=notification_message,
+                notification_type='friend_request',
+                link=notification_link
+            )
             return True
         return False  # already friends or trying to add myself as friend
 
@@ -122,7 +134,7 @@ class User(db.Model, UserMixin):
     def __repr__(self):
         return f"<User {self.username}>"
 
-    def get_friend_recommendations(self, limit=15):
+    def get_friend_recommendations(self, limit=15): 
         from sqlalchemy import func
         
         # Get IDs of current friends
@@ -329,3 +341,37 @@ class Message(db.Model):
 
     def __repr__(self):
         return f"<Message {self.id}: {self.sender_id} -> {self.recipient_id}>"
+
+
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    message = db.Column(db.String(255), nullable=False)
+    notification_type = db.Column(db.String(50), nullable=False, default='default')
+    link = db.Column(db.String(255))
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    is_read = db.Column(db.Boolean, default=False)
+
+    user = db.relationship('User', backref=db.backref('notifications', lazy='dynamic'))
+
+    def to_dict(self):
+        try:
+            return {
+                'id': self.id,
+                'message': self.message,
+                'type': self.notification_type,
+                'link': self.link,
+                'timestamp': self.timestamp.isoformat() + 'Z' if self.timestamp else None,  # Add 'Z' to indicate UTC
+                'is_read': bool(self.is_read)  # Ensure boolean type
+            }
+        except Exception as e:
+            current_app.logger.error(f"Error converting notification {self.id} to dict: {str(e)}")
+            # Return a safe fallback
+            return {
+                'id': self.id,
+                'message': str(self.message) if self.message else 'Error loading message',
+                'type': str(self.notification_type) if self.notification_type else 'default',
+                'link': str(self.link) if self.link else None,
+                'timestamp': None,
+                'is_read': False
+            }

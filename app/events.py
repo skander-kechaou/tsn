@@ -1,7 +1,8 @@
 from flask_socketio import emit
 from flask_login import current_user
-from app import socketio
+from app import socketio, db
 from datetime import datetime
+from .models import Notification
 
 @socketio.on('connect')
 def handle_connect():
@@ -12,31 +13,33 @@ def handle_connect():
         print(f"User {current_user.username} connected to Socket.IO and joined room {room}")
 
 def send_notification(user_id, message, notification_type='default', link=None):
-    """
-    Send a notification to a specific user
-    
-    Args:
-        user_id: The ID of the user to send the notification to
-        message: The notification message
-        notification_type: Type of notification (message, friend_request, etc.)
-        link: Optional link to redirect to when clicking the notification
-    """
     print(f"Preparing notification for user {user_id}")
     print(f"Message: {message}")
     print(f"Type: {notification_type}")
     print(f"Link: {link}")
     
-    notification_data = {
-        'message': message,
-        'type': notification_type,
-        'timestamp': datetime.utcnow().isoformat(),
-        'link': link
-    }
+    # Create notification in database
+    notification = Notification(
+        user_id=user_id,
+        message=message,
+        notification_type=notification_type,
+        link=link,
+        timestamp=datetime.utcnow()
+    )
     
-    room = f'user_{user_id}'
-    print(f"Emitting notification to room: {room}")
-    print(f"Notification data: {notification_data}")
-    
-    # Emit to the user's specific room
-    emit('new_notification', notification_data, room=room)
-    print(f"Notification sent to room {room}") 
+    try:
+        db.session.add(notification)
+        db.session.commit()
+        
+        notification_data = notification.to_dict()
+        
+        room = f'user_{user_id}'
+        print(f"Emitting notification to room: {room}")
+        print(f"Notification data: {notification_data}")
+        
+        # Emit to the user's specific room
+        emit('new_notification', notification_data, room=room)
+        print(f"Notification sent to room {room}")
+    except Exception as e:
+        print(f"Error creating notification: {str(e)}")
+        db.session.rollback() 

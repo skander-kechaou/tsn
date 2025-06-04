@@ -10,26 +10,8 @@
                     <div class="card-header" style="background-color: #09619f; color: white;">
                         <h5 class="mb-0" style="color: white;"><i class="fas fa-user-friends mr-2"></i>People You May Know</h5>
                     </div>
-                    <div class="card-body p-0">
-                        {% set friend_recommendations = current_user.get_friend_recommendations(limit=5) %}
-                        {% if friend_recommendations %}
-                            {% for user in friend_recommendations %}
-                                <div class="d-flex align-items-center p-3 {% if not loop.last %}border-bottom{% endif %}">
-                                    <img src="{{ url_for('static', filename=user.profile_pic) if user.profile_pic.startswith('images/') else url_for('main.uploaded_profile_pic', filename=user.profile_pic.split('/')[-1]) if user.profile_pic else url_for('static', filename='images/default_profile.jpg') }}"
-                                         class="rounded-circle mr-3"
-                                         style="width: 45px; height: 45px; object-fit: cover;"
-                                         alt="{{ user.username }}'s profile picture">
-                                    <div class="flex-grow-1">
-                                        <h6 class="mb-0">{{ user.first_name }} {{ user.last_name }}</h6>
-                                        <small class="text-muted">@{{ user.username }}</small>
-                                    </div>
-                                    <a href="{{ url_for('profile.view_profile', username=user.username) }}" 
-                                       class="btn btn-outline-primary btn-sm">View</a>
-                                </div>
-                            {% endfor %}
-                        {% else %}
-                            <p class="text-muted text-center p-3">No suggestions available at the moment.</p>
-                        {% endif %}
+                    <div class="card-body p-0" id="friend-recommendations">
+                        {# Recommendations will be loaded here dynamically #}
                     </div>
                 </div>
             </div>
@@ -311,7 +293,7 @@
                                             data-target="#comments-share-{{ item.id }}" aria-expanded="false"
                                             aria-controls="comments-share-{{ item.id }}">
                                         <i class="far fa-comment"></i> Peep
-                                        <span class="badge badge-light ml-1">{{ item.comment_count() if item.comment_count is defined else 0 }}</span>
+                                        <span class="badge badge-light ml-1">{{ item.comment_count() }}</span>
                                     </button>
                                 {% else %}
                                     <form method="POST" action="{{ url_for('main.like_post', post_id=item.id) }}"
@@ -334,10 +316,9 @@
                                         <span class="badge badge-light ml-1">{{ item.comment_count() }}</span>
                                     </button>
                                 {% endif %}
-                                <button 
-                                    class="btn btn-link text-muted p-1" 
-                                    type="button"
-                                    onclick="sharePost({{ item.id if item_type == 'post' else item.original_post.id }})">
+                                <button class="btn btn-link text-muted p-1"
+                                        type="button"
+                                        onclick="sharePost({{ item.id if item_type == 'post' else item.original_post.id }})">
                                     <i class="fas fa-share"></i> Echo
                                 </button>
                             </div>
@@ -582,5 +563,46 @@
                 });
             });
         });
+
+        function loadFriendRecommendations() {
+            fetch('/api/friend-recommendations')
+                .then(response => response.json())
+                .then(recommendations => {
+                    const container = document.getElementById('friend-recommendations');
+                    if (recommendations.length === 0) {
+                        container.innerHTML = '<p class="text-muted text-center p-3">No suggestions available at the moment.</p>';
+                        return;
+                    }
+
+                    let html = '';
+                    recommendations.forEach(user => {
+                        html += `
+                            <div class="d-flex align-items-center p-3 ${recommendations.indexOf(user) !== recommendations.length - 1 ? 'border-bottom' : ''}">
+                                <img src="${user.profile_pic.startsWith('images/') ? '/static/' + user.profile_pic : '/uploaded_profile_pic/' + user.profile_pic.split('/').pop()}"
+                                     class="rounded-circle mr-3"
+                                     style="width: 45px; height: 45px; object-fit: cover;"
+                                     alt="${user.username}'s profile picture">
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-0">${user.first_name} ${user.last_name}</h6>
+                                    <small class="text-muted">@${user.username}</small>
+                                </div>
+                                <a href="/profile/${user.username}" 
+                                   class="btn btn-outline-primary btn-sm">View</a>
+                            </div>`;
+                    });
+                    container.innerHTML = html;
+                })
+                .catch(error => {
+                    console.error('Error loading recommendations:', error);
+                    document.getElementById('friend-recommendations').innerHTML = 
+                        '<p class="text-muted text-center p-3">Error loading suggestions.</p>';
+                });
+        }
+
+        // Load recommendations when page loads
+        document.addEventListener('DOMContentLoaded', loadFriendRecommendations);
+
+        // Listen for friend addition events
+        document.addEventListener('friendAdded', loadFriendRecommendations);
     </script>
 {% endblock %}

@@ -5,7 +5,10 @@
     <div class="row align-items-center"> {# align-items-center to vertically center content if columns have different heights #}
         {# Left Column: Welcome Text & Value Proposition #}
         <div class="col-md-7 col-lg-8"> {# Takes up more space on medium and larger screens #}
-            <h1 class="display-4">Welcome to The Nest</h1>
+            <div class="text-center mb-4">
+                <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Nest Logo" class="img-fluid" style="max-height: 150px;">
+            </div>
+            <h1 class="display-4">Welcome to Nest</h1>
             <p class="lead">
                 Join our cozy community where birdies come together to share their stories,
                 build meaningful connections, and create a warm, welcoming space for everyone.
@@ -22,7 +25,7 @@
             <div class="card shadow">
                 <div class="card-body">
                     <h2 class="card-title text-center mb-4">Welcome Back!</h2>
-                    <p class="text-center">Missed the Nest?</p>
+                    <p class="text-center">Missed Nest?</p>
                     <a href="{{ url_for('security.login') }}" class="btn btn-primary btn-block btn-lg mb-3">Fly In</a>
                     <a href="{{ url_for('google.login') }}" class="btn btn-danger btn-lg btn-block">
                     <i class="fab fa-google mr-2"></i>Fly In with Google</a>

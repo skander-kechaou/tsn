@@ -122,6 +122,52 @@ class User(db.Model, UserMixin):
     def __repr__(self):
         return f"<User {self.username}>"
 
+    def get_friend_recommendations(self, limit=15):
+        from sqlalchemy import func
+        
+        # Get IDs of current friends
+        friend_ids = self.friend_ids()
+        
+        # Get friends of friends who aren't already friends
+        friends_of_friends = User.query\
+            .join(friendships, User.id == friendships.c.friend_id)\
+            .filter(friendships.c.user_id.in_(friend_ids))\
+            .filter(User.id != self.id)\
+            .filter(~User.id.in_(friend_ids))\
+            .group_by(User.id)\
+            .order_by(func.count(User.id).desc())\
+            .limit(limit)\
+            .all()
+            
+        return friends_of_friends
+
+    def get_popular_posts(self, limit=15):
+        from sqlalchemy import func
+        
+        # Get IDs of friends and friends of friends in a single query
+        friend_ids = self.friend_ids()
+        
+        # Get friends of friends IDs
+        friend_of_friend_ids = db.session.query(friendships.c.friend_id)\
+            .filter(friendships.c.user_id.in_(friend_ids))\
+            .filter(friendships.c.friend_id != self.id)\
+            .filter(~friendships.c.friend_id.in_(friend_ids))\
+            .distinct()\
+            .all()
+            
+        friend_of_friend_ids = [f[0] for f in friend_of_friend_ids]
+        all_relevant_ids = friend_ids + friend_of_friend_ids
+        
+        # Get posts from friends and friends of friends
+        posts = Post.query\
+            .filter(Post.user_id.in_(all_relevant_ids))\
+            .filter(Post.visibility == VisibilityEnum.PUBLIC)\
+            .all()
+            
+        # Sort by popularity score
+        sorted_posts = sorted(posts, key=lambda x: x.popularity_score(), reverse=True)
+        return sorted_posts[:limit]
+
 
 class Post(db.Model):
     __tablename__ = 'post'
@@ -129,14 +175,27 @@ class Post(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     content = db.Column(db.Text, nullable=False)
     visibility = db.Column(db.Enum(VisibilityEnum), default=VisibilityEnum.PUBLIC, nullable=False)
-    # user = db.relationship('User', backref='posts')
-    # likes = db.relationship('Like', backref='post', lazy='dynamic')
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     likes = db.relationship('Like', foreign_keys='Like.post_id', backref='liked_post_object', lazy='dynamic',
                             cascade="all, delete-orphan")
     comments = db.relationship('Comment', backref='commented_on_post', lazy='dynamic',
-                               cascade="all, delete-orphan")  # Changed backref
+                               cascade="all, delete-orphan")
     media = db.Column(db.String(255), nullable=True)
+
+    def popularity_score(self):
+        from datetime import datetime, timedelta
+        
+        # Base score from likes and comments
+        like_weight = 1.0
+        comment_weight = 2.0  # Comments are weighted more than likes
+        
+        base_score = (self.like_count() * like_weight) + (self.comment_count() * comment_weight)
+        
+        # Time decay factor (posts get less popular over time)
+        hours_old = (datetime.utcnow() - self.timestamp).total_seconds() / 3600
+        decay_factor = 1.0 / (1.0 + (hours_old / 24))  # 24-hour half-life
+        
+        return base_score * decay_factor
 
     def like_count(self):
         return self.likes.count()
@@ -144,7 +203,6 @@ class Post(db.Model):
     def is_liked_by(self, user):
         if not user or not user.is_authenticated:
             return False
-        # Check if there's a Like record linking this user to this specific post_id
         return Like.query.filter_by(user_id=user.id, post_id=self.id).first() is not None
 
     def comment_count(self):

@@ -625,3 +625,13 @@ def add_comment_to_share(share_id):
         flash('Error adding comment.', 'danger')
 
     return redirect(request.referrer or url_for('main.dashboard'))
+
+@bp.route('/recommendations')
+@login_required
+def recommendations():
+    friend_recommendations = current_user.get_friend_recommendations(limit=10)
+    popular_posts = current_user.get_popular_posts(limit=10)
+    
+    return render_template('main/recommendations.html',
+                         friend_recommendations=friend_recommendations,
+                         popular_posts=popular_posts)

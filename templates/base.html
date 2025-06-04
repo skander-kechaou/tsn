@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{{ title if title else "TSN Platform" }}</title>
+    <title>{{ title if title else "Nest" }}</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
@@ -150,7 +150,7 @@
        href="{{ url_for('main.index') if not current_user.is_authenticated else url_for('main.dashboard') }}">
         <img src="{{ url_for('static', filename='images/logo.png') }}" alt="TSN Platform Logo" height="40"
              class="d-inline-block align-top">
-        The Nest
+        Nest
     </a>
 
     {# Navbar Toggler Button #}
@@ -251,7 +251,7 @@
     </div>
 </nav>
 
-<div class="container mt-3">
+<div class="container mt-3" style="max-width: 1500px;">
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}

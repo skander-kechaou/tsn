@@ -132,6 +132,28 @@
 </style>
 <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script>
+// Initialize Socket.IO with proper configuration
+const socket = io({
+    transports: ['websocket'],
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+    timeout: 10000
+});
+
+// Connection status handling
+socket.on('connect', () => {
+    console.log('Connected to Socket.IO server');
+});
+
+socket.on('connect_error', (error) => {
+    console.error('Socket.IO connection error:', error);
+});
+
+socket.on('disconnect', (reason) => {
+    console.log('Disconnected from Socket.IO server:', reason);
+});
+
 const currentUserId = "{{ current_user.id }}";
 let selectedFriendId = null;
 let chatRefreshInterval = null;
@@ -189,9 +211,11 @@ function updateLastMessage(friendId, message) {
 const chatListItems = document.querySelectorAll('.chat-list-item');
 chatListItems.forEach(item => {
     item.addEventListener('click', function() {
+        console.log('Chat list item clicked:', this.getAttribute('data-friend-id'));
         chatListItems.forEach(i => i.classList.remove('active'));
         this.classList.add('active');
         selectedFriendId = this.getAttribute('data-friend-id');
+        console.log('Selected friend ID set to:', selectedFriendId);
         
         if (chatRefreshInterval) {
             clearInterval(chatRefreshInterval);
@@ -244,32 +268,106 @@ function formatTimestamp(timestamp) {
     return `${hours}:${minutes}`;
 }
 
-// Socket.IO for sending/receiving messages
-const socket = io();
-
 // Send message
 const messageInput = document.getElementById('message-input');
 messageInput.addEventListener('keydown', function(e) {
+    console.log('Key pressed:', e.key);
+    console.log('Selected friend ID:', selectedFriendId);
+    console.log('Message input value:', messageInput.value);
+    
     if (e.key === 'Enter' && selectedFriendId && messageInput.value.trim() !== '') {
+        e.preventDefault(); // Prevent default Enter behavior
         const msg = messageInput.value.trim();
         const timestamp = new Date().toISOString();
-        socket.emit('message', {
+        
+        console.log('Attempting to send message:', {
             recipient_id: selectedFriendId,
             content: msg,
             timestamp: timestamp
         });
+        
+        // Show sending state
+        const tempMessageId = Date.now();
+        const chatMessages = document.getElementById('chat-messages');
+        chatMessages.innerHTML += `
+            <div class="message-bubble sent" id="temp-${tempMessageId}">
+                <div class="message-content">${msg}</div>
+                <span class="message-time">Sending...</span>
+            </div>`;
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        
+        // Send message with timeout
+        const timeoutId = setTimeout(() => {
+            console.error('Message send timeout');
+            const tempMessage = document.getElementById(`temp-${tempMessageId}`);
+            if (tempMessage) {
+                tempMessage.remove();
+            }
+            chatMessages.innerHTML += `
+                <div class="message-bubble sent error">
+                    <div class="message-content">Message send timeout</div>
+                </div>`;
+        }, 5000);
+        
+        // Send message
+        socket.emit('message', {
+            recipient_id: selectedFriendId,
+            content: msg,
+            timestamp: timestamp
+        }, (response) => {
+            clearTimeout(timeoutId);
+            console.log('Message send response:', response);
+            
+            // Remove temporary message
+            const tempMessage = document.getElementById(`temp-${tempMessageId}`);
+            if (tempMessage) {
+                tempMessage.remove();
+            }
+            
+            if (response && response.error) {
+                console.error('Message send error:', response.error);
+                // Show error message
+                chatMessages.innerHTML += `
+                    <div class="message-bubble sent error">
+                        <div class="message-content">Failed to send message: ${response.error}</div>
+                    </div>`;
+            } else {
+                // Reload chat history to show the sent message
+                loadChatHistory(selectedFriendId);
+            }
+        });
+        
         messageInput.value = '';
-        loadChatHistory(selectedFriendId); // Instantly update chat after sending
+    } else {
+        console.log('Message not sent because:', {
+            isEnter: e.key === 'Enter',
+            hasSelectedFriend: !!selectedFriendId,
+            hasMessage: messageInput.value.trim() !== ''
+        });
     }
 });
 
 // Receive message
 socket.on('message', function(data) {
+    console.log('Received message event:', data);
     // Only show if the message is for the selected friend
     if ((data.sender_id == selectedFriendId && data.recipient_id == currentUserId) ||
         (data.sender_id == currentUserId && data.recipient_id == selectedFriendId)) {
+        console.log('Message is for current chat, reloading history');
         loadChatHistory(selectedFriendId);
+    } else {
+        console.log('Message is not for current chat, ignoring');
     }
+});
+
+// Handle errors
+socket.on('error', function(data) {
+    console.error('Socket.IO error:', data.message);
+    const chatMessages = document.getElementById('chat-messages');
+    chatMessages.innerHTML += `
+        <div class="message-bubble sent error">
+            <div class="message-content">Error: ${data.message}</div>
+        </div>`;
 });
 
 // Clean up interval when leaving the page
@@ -285,19 +383,33 @@ function getQueryParam(name) {
     return url.searchParams.get(name);
 }
 
+const userParam = getQueryParam('user');
+if (userParam) {
+    const chatItem = document.querySelector(`.chat-list-item[data-friend-id="${userParam}"]`);
+    if (chatItem) {
+        chatItem.click();
+    }
+}
+
 // Initialize last messages for all friends
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing chat');
     const userIdFromQuery = getQueryParam('user');
     if (userIdFromQuery) {
+        console.log('User ID from query:', userIdFromQuery);
         const item = document.querySelector(`.chat-list-item[data-friend-id="${userIdFromQuery}"]`);
         if (item) {
+            console.log('Found chat item for user, clicking it');
             item.click();
+        } else {
+            console.log('No chat item found for user');
         }
     }
     
     // Load initial last messages for all friends
     document.querySelectorAll('.chat-list-item').forEach(item => {
         const friendId = item.getAttribute('data-friend-id');
+        console.log('Loading initial messages for friend:', friendId);
         const lastMessageEl = document.querySelector(`.last-message[data-friend-id="${friendId}"]`);
         const lastMessageTimeEl = document.querySelector(`.last-message-time[data-friend-id="${friendId}"]`);
         
@@ -314,6 +426,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     updateLastMessage(friendId, lastMessage);
                 }
                 updateChatListOrder();
+            })
+            .catch(error => {
+                console.error('Error loading initial messages:', error);
             });
     });
 });

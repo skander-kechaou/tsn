@@ -24,3 +24,128 @@
 #         flash('Profile updated successfully!', 'success')
 #         return redirect(url_for('profile.view_profile', username=current_user.username))
 #     return render_template('profile/edit.html', form=form)
+
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask_login import current_user, login_required, login_user, logout_user
+from .. import db
+from ..models import User
+from ..profile.forms import EditProfileForm  # Create a WTForm for profile editing
+from ..auth.forms import LoginForm, RegistrationForm, ResetPasswordRequestForm, ResetPasswordForm, ExtendedRegisterForm
+from flask_login import login_user
+from datetime import datetime, timedelta
+import secrets
+import string
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+
+bp = Blueprint('profile', __name__, template_folder='templates')
+
+@bp.route('register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+        
+    form = ExtendedRegisterForm()
+    if form.validate_on_submit():
+        try:
+            # Create new user
+            user = User(
+                username=form.username.data,
+                email=form.email.data,
+                password=form.password.data,
+                first_name=form.first_name.data,
+                last_name=form.last_name.data,
+                phone=form.phone.data,
+                date_birth=form.date_birth.data,
+                gender=form.gender.data,
+                active=True
+            )
+            
+            # Add user to database
+            db.session.add(user)
+            db.session.commit()
+            
+            # Log the user in
+            login_user(user)
+            
+            flash('Registration successful! Welcome to Nest.', 'success')
+            return redirect(url_for('main.dashboard'))
+            
+        except IntegrityError as e:
+            db.session.rollback()
+            current_app.logger.error(f"Database integrity error during registration: {str(e)}")
+            if 'username' in str(e).lower():
+                form.username.errors.append('This username is already taken.')
+            elif 'email' in str(e).lower():
+                form.email.errors.append('This email is already registered.')
+            elif 'phone' in str(e).lower():
+                form.phone.errors.append('This phone number is already registered.')
+            else:
+                flash('An error occurred during registration. Please try again.', 'error')
+                
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            current_app.logger.error(f"Database error during registration: {str(e)}")
+            flash('An error occurred during registration. Please try again.', 'error')
+            
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Unexpected error during registration: {str(e)}")
+            flash('An unexpected error occurred. Please try again.', 'error')
+    
+    return render_template('security/register_user.html', register_user_form=form)
+
+@bp.route('login', methods=['GET', 'POST'])
+@login_required
+def edit_profile():
+    form = EditProfileForm(obj=current_user)
+    if form.validate_on_submit():
+        # Update user fields
+        current_user.username = form.username.data
+        # Optionally update additional fields: bio, interests, etc.
+        db.session.commit()
+        flash('Profile updated successfully!', 'success')
+        return redirect(url_for('profile.view_profile', username=current_user.username))
+    return render_template('profile/edit.html', form=form)
+
+def generate_reset_token():
+    """Generate a random token for password reset"""
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(32))
+
+@bp.route('/reset_password_request', methods=['GET', 'POST'])
+def reset_password_request():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
+    form = ResetPasswordRequestForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user:
+            token = generate_reset_token()
+            user.reset_token = token
+            user.reset_token_expiry = datetime.utcnow() + timedelta(hours=1)
+            db.session.commit()
+            # In a real application, you would send an email here
+            # For now, we'll just flash a message with the reset link
+            reset_url = url_for('auth.reset_password', token=token, _external=True)
+            flash(f'Password reset link: {reset_url}')
+            return redirect(url_for('auth.login'))
+        flash('Email address not found')
+    return render_template('auth/reset_password_request.html', title='Reset Password', form=form)
+
+@bp.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
+    user = User.query.filter_by(reset_token=token).first()
+    if not user or user.reset_token_expiry < datetime.utcnow():
+        flash('Invalid or expired password reset link')
+        return redirect(url_for('auth.reset_password_request'))
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        user.set_password(form.password.data)
+        user.reset_token = None
+        user.reset_token_expiry = None
+        db.session.commit()
+        flash('Your password has been reset')
+        return redirect(url_for('auth.login'))
+    return render_template('auth/reset_password.html', form=form)

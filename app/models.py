@@ -9,6 +9,7 @@ from flask_security import UserMixin, RoleMixin  # Add RoleMixin
 from datetime import datetime  # Often useful for confirmed_at, etc.
 from enum import Enum as PyEnum
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum
+from .sms import send_sms as send_sms_notification
 
 # Association table for bi-directional friendships
 friendships = db.Table('friendships',
@@ -76,6 +77,8 @@ class User(db.Model, UserMixin):
                                         cascade="all, delete-orphan")
     shares_authored = db.relationship('Share', backref='author', foreign_keys='Share.user_id', lazy='dynamic',
                                       cascade="all, delete-orphan")
+    reset_token = db.Column(db.String(100), unique=True)
+    reset_token_expiry = db.Column(db.DateTime)
 
     # Self-referencing many-to-many for friendships
     friends = db.relationship(
@@ -101,16 +104,22 @@ class User(db.Model, UserMixin):
             self.friends.append(user_to_add)
             user_to_add.friends.append(self)  # mutual friendship
             
-            # Send notification to the user being added
-            from .events import send_notification
-            notification_message = f"{self.username} added you to their flock!"
-            notification_link = f"/profile/{self.username}"
-            send_notification(
+            # Create notification in database
+            notification = Notification(
                 user_id=user_to_add.id,
-                message=notification_message,
+                message=f"{self.username} added you to their flock!",
                 notification_type='friend_request',
-                link=notification_link
+                link=f"/profile/{self.username}"
             )
+            db.session.add(notification)
+            db.session.commit()
+            
+            # Send SMS notification if phone number exists
+            if user_to_add.phone:
+                send_sms_notification(
+                    user_to_add.phone,
+                    f"{self.username} added you to their flock! Check your notifications for more details."
+                )
             return True
         return False  # already friends or trying to add myself as friend
 
@@ -375,3 +384,119 @@ class Notification(db.Model):
                 'timestamp': None,
                 'is_read': False
             }
+
+class Event(db.Model):
+    __tablename__ = 'event'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    creator_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    location = db.Column(db.String(255), nullable=True)
+    event_datetime = db.Column(db.DateTime, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    max_participants = db.Column(db.Integer, nullable=True)
+    
+    # Relationships
+    creator = db.relationship('User', backref=db.backref('created_events', lazy='dynamic'), 
+                            foreign_keys=[creator_id])
+    collaborators = db.relationship('User', 
+                                  secondary='event_collaborators',
+                                  backref=db.backref('collaborated_events', lazy='dynamic'),
+                                  lazy='dynamic')
+    rsvps = db.relationship('EventRSVP', backref='event', lazy='dynamic', cascade="all, delete-orphan")
+
+    def add_collaborator(self, user):
+        if user not in self.collaborators:
+            self.collaborators.append(user)
+            
+            # Create notification in database
+            notification = Notification(
+                user_id=user.id,
+                message=f"You've been added as a collaborator to event: {self.title}",
+                notification_type='event_collaboration',
+                link=f"/events/{self.id}"
+            )
+            db.session.add(notification)
+            
+            # Send SMS notification if user has a phone number
+            if user.phone:
+                message = f"🎉 You've been added as a collaborator to event: {self.title}!"
+                from .sms import send_rsvp_notification
+                send_rsvp_notification(user.phone, message)
+            
+            db.session.commit()
+            return True
+        return False
+
+    def remove_collaborator(self, user):
+        if user in self.collaborators:
+            self.collaborators.remove(user)
+            return True
+        return False
+
+    def add_rsvp(self, user):
+        from .sms import send_rsvp_notification
+        try:
+            # Check if user has already RSVP'd using the relationship
+            existing_rsvp = EventRSVP.query.filter_by(event_id=self.id, user_id=user.id).first()
+            if existing_rsvp:
+                return False, "You have already RSVP'd to this event."
+            
+            if self.max_participants and self.rsvps.count() >= self.max_participants:
+                return False, "Sorry, this event is full."
+            
+            # Create new RSVP
+            rsvp = EventRSVP(user=user, event=self)
+            db.session.add(rsvp)
+            
+            # Send notification to event creator
+            notification = Notification(
+                user_id=self.creator_id,
+                message=f"{user.username} has RSVP'd to your event '{self.title}'",
+                notification_type='event_rsvp',
+                link=f"/events/{self.id}"
+            )
+            db.session.add(notification)
+            
+            # Send SMS notification if creator has a phone number
+            if self.creator.phone:
+                message = f"🎉 {user.username} has RSVP'd to your event '{self.title}'!"
+                send_rsvp_notification(self.creator.phone, message)
+            
+            db.session.commit()
+            return True, "Successfully RSVP'd to the event."
+            
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error adding RSVP: {str(e)}")
+            return False, "An error occurred while processing your RSVP. Please try again."
+
+    def remove_rsvp(self, user):
+        rsvp = EventRSVP.query.filter_by(event_id=self.id, user_id=user.id).first()
+        if rsvp:
+            db.session.delete(rsvp)
+            return True
+        return False
+
+    def can_edit(self, user):
+        return (user.id == self.creator_id or 
+                user in self.collaborators)
+
+class EventCollaborator(db.Model):
+    __tablename__ = 'event_collaborators'
+    event_id = db.Column(db.Integer, db.ForeignKey('event.id', ondelete="CASCADE"), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete="CASCADE"), primary_key=True)
+    joined_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+class EventRSVP(db.Model):
+    __tablename__ = 'event_rsvp'
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.Integer, db.ForeignKey('event.id', ondelete="CASCADE"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete="CASCADE"), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    user = db.relationship('User', backref=db.backref('event_rsvps', lazy='dynamic'))
+
+    __table_args__ = (
+        db.UniqueConstraint('event_id', 'user_id', name='unique_event_rsvp'),
+    )

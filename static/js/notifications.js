@@ -3,7 +3,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const socket = io({
         reconnection: true,
         reconnectionAttempts: 5,
-        reconnectionDelay: 1000
+        reconnectionDelay: 1000,
+        timeout: 10000
     });
 
     // DOM Elements
@@ -28,12 +29,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function playNotificationSound() {
         if (notificationSound) {
             try {
-                // Create a new promise to handle the play attempt
                 const playPromise = notificationSound.play();
-                
                 if (playPromise !== undefined) {
                     playPromise.catch(error => {
-                        // Only log if it's not an autoplay restriction
                         if (error.name !== 'NotAllowedError') {
                             console.log('Audio play failed:', error);
                         }
@@ -75,20 +73,47 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Handle incoming notifications
     socket.on('new_notification', function(data) {
-        console.log('Received notification:', data);
-        // Add notification to the list
-        notifications.unshift(data);
-        updateNotificationDisplay();
-        
-        // Play notification sound
-        playNotificationSound();
+        try {
+            console.log('Received notification:', data);
+            if (!data || !data.message) {
+                throw new Error('Invalid notification data received');
+            }
+            // Add notification to the list
+            notifications.unshift(data);
+            updateNotificationDisplay();
+            
+            // Play notification sound
+            playNotificationSound();
 
-        // Show a toast notification
-        showToast(data.message);
+            // Show a toast notification
+            showToast(data.message);
+        } catch (error) {
+            console.error('Error handling new notification:', error);
+            showToast('Error receiving notification');
+        }
+    });
+
+    // Handle Socket.IO errors
+    socket.on('error', function(error) {
+        console.error('Socket.IO error:', error);
+        showToast('Connection error. Please refresh the page.');
+    });
+
+    socket.on('connect_error', function(error) {
+        console.error('Socket.IO connection error:', error);
+        showToast('Connection error. Please check your internet connection.');
+    });
+
+    socket.on('disconnect', function(reason) {
+        console.log('Socket.IO disconnected:', reason);
+        if (reason === 'io server disconnect') {
+            // Server initiated disconnect, try to reconnect
+            socket.connect();
+        }
     });
 
     // Function to show toast notification
-    function showToast(message) {
+    function showToast(message, type = 'info') {
         // Create toast container if it doesn't exist
         let toastContainer = document.getElementById('toast-container');
         if (!toastContainer) {
@@ -103,8 +128,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Create toast element
         const toast = document.createElement('div');
-        toast.className = 'toast show';
-        toast.style.backgroundColor = 'white';
+        toast.className = `toast show bg-${type}`;
+        toast.style.backgroundColor = type === 'error' ? '#dc3545' : 'white';
+        toast.style.color = type === 'error' ? 'white' : 'inherit';
         toast.style.padding = '10px 20px';
         toast.style.marginBottom = '10px';
         toast.style.borderRadius = '4px';
@@ -112,7 +138,7 @@ document.addEventListener('DOMContentLoaded', function() {
         toast.style.display = 'block';
         toast.innerHTML = `
             <div class="toast-header">
-                <strong class="me-auto">New Notification</strong>
+                <strong class="me-auto">${type === 'error' ? 'Error' : 'New Notification'}</strong>
                 <button type="button" class="btn-close" onclick="this.parentElement.parentElement.remove()"></button>
             </div>
             <div class="toast-body">

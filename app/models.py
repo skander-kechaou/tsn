@@ -104,16 +104,22 @@ class User(db.Model, UserMixin):
             self.friends.append(user_to_add)
             user_to_add.friends.append(self)  # mutual friendship
             
-            # Send notification to the user being added
-            from .sms import send_notification
-            notification_message = f"{self.username} added you to their flock!"
-            notification_link = f"/profile/{self.username}"
-            send_notification(
+            # Create notification in database
+            notification = Notification(
                 user_id=user_to_add.id,
-                message=notification_message,
+                message=f"{self.username} added you to their flock!",
                 notification_type='friend_request',
-                link=notification_link
+                link=f"/profile/{self.username}"
             )
+            db.session.add(notification)
+            db.session.commit()
+            
+            # Send SMS notification if phone number exists
+            if user_to_add.phone:
+                send_sms_notification(
+                    user_to_add.phone,
+                    f"{self.username} added you to their flock! Check your notifications for more details."
+                )
             return True
         return False  # already friends or trying to add myself as friend
 
@@ -402,14 +408,23 @@ class Event(db.Model):
     def add_collaborator(self, user):
         if user not in self.collaborators:
             self.collaborators.append(user)
-            # Send notification
-            from .sms import send_notification
-            send_notification(
+            
+            # Create notification in database
+            notification = Notification(
                 user_id=user.id,
                 message=f"You've been added as a collaborator to event: {self.title}",
                 notification_type='event_collaboration',
                 link=f"/events/{self.id}"
             )
+            db.session.add(notification)
+            
+            # Send SMS notification if user has a phone number
+            if user.phone:
+                message = f"🎉 You've been added as a collaborator to event: {self.title}!"
+                from .sms import send_rsvp_notification
+                send_rsvp_notification(user.phone, message)
+            
+            db.session.commit()
             return True
         return False
 
@@ -421,21 +436,40 @@ class Event(db.Model):
 
     def add_rsvp(self, user):
         from .sms import send_rsvp_notification
-        if user in self.rsvps:
-            return False, "You have already RSVP'd to this event."
-        
-        if self.max_participants and self.rsvps.count() >= self.max_participants:
-            return False, "Sorry, this event is full."
-        
-        rsvp = EventRSVP(user=user, event=self)
-        db.session.add(rsvp)
-        db.session.commit()
-        
-        # Send SMS notification
-        message = f"🎉 {user.username} has RSVP'd to your event '{self.title}'!"
-        send_rsvp_notification(self.creator.phone, message)
-        
-        return True, "Successfully RSVP'd to the event."
+        try:
+            # Check if user has already RSVP'd using the relationship
+            existing_rsvp = EventRSVP.query.filter_by(event_id=self.id, user_id=user.id).first()
+            if existing_rsvp:
+                return False, "You have already RSVP'd to this event."
+            
+            if self.max_participants and self.rsvps.count() >= self.max_participants:
+                return False, "Sorry, this event is full."
+            
+            # Create new RSVP
+            rsvp = EventRSVP(user=user, event=self)
+            db.session.add(rsvp)
+            
+            # Send notification to event creator
+            notification = Notification(
+                user_id=self.creator_id,
+                message=f"{user.username} has RSVP'd to your event '{self.title}'",
+                notification_type='event_rsvp',
+                link=f"/events/{self.id}"
+            )
+            db.session.add(notification)
+            
+            # Send SMS notification if creator has a phone number
+            if self.creator.phone:
+                message = f"🎉 {user.username} has RSVP'd to your event '{self.title}'!"
+                send_rsvp_notification(self.creator.phone, message)
+            
+            db.session.commit()
+            return True, "Successfully RSVP'd to the event."
+            
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error adding RSVP: {str(e)}")
+            return False, "An error occurred while processing your RSVP. Please try again."
 
     def remove_rsvp(self, user):
         rsvp = EventRSVP.query.filter_by(event_id=self.id, user_id=user.id).first()

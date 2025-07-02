@@ -25,24 +25,74 @@
 #         return redirect(url_for('profile.view_profile', username=current_user.username))
 #     return render_template('profile/edit.html', form=form)
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import current_user, login_required, login_user, logout_user
 from .. import db
 from ..models import User
 from ..profile.forms import EditProfileForm  # Create a WTForm for profile editing
-from ..auth.forms import LoginForm, RegistrationForm, ResetPasswordRequestForm, ResetPasswordForm
+from ..auth.forms import LoginForm, RegistrationForm, ResetPasswordRequestForm, ResetPasswordForm, ExtendedRegisterForm
 from flask_login import login_user
 from datetime import datetime, timedelta
 import secrets
 import string
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
 bp = Blueprint('profile', __name__, template_folder='templates')
 
-@bp.route('register')
-@login_required
-def register(username):
-    user = User.query.filter_by(username=username).first_or_404()
-    return render_template('security/register_user.html', user=user)
+@bp.route('register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+        
+    form = ExtendedRegisterForm()
+    if form.validate_on_submit():
+        try:
+            # Create new user
+            user = User(
+                username=form.username.data,
+                email=form.email.data,
+                password=form.password.data,
+                first_name=form.first_name.data,
+                last_name=form.last_name.data,
+                phone=form.phone.data,
+                date_birth=form.date_birth.data,
+                gender=form.gender.data,
+                active=True
+            )
+            
+            # Add user to database
+            db.session.add(user)
+            db.session.commit()
+            
+            # Log the user in
+            login_user(user)
+            
+            flash('Registration successful! Welcome to Nest.', 'success')
+            return redirect(url_for('main.dashboard'))
+            
+        except IntegrityError as e:
+            db.session.rollback()
+            current_app.logger.error(f"Database integrity error during registration: {str(e)}")
+            if 'username' in str(e).lower():
+                form.username.errors.append('This username is already taken.')
+            elif 'email' in str(e).lower():
+                form.email.errors.append('This email is already registered.')
+            elif 'phone' in str(e).lower():
+                form.phone.errors.append('This phone number is already registered.')
+            else:
+                flash('An error occurred during registration. Please try again.', 'error')
+                
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            current_app.logger.error(f"Database error during registration: {str(e)}")
+            flash('An error occurred during registration. Please try again.', 'error')
+            
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Unexpected error during registration: {str(e)}")
+            flash('An unexpected error occurred. Please try again.', 'error')
+    
+    return render_template('security/register_user.html', register_user_form=form)
 
 @bp.route('login', methods=['GET', 'POST'])
 @login_required

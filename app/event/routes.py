@@ -79,7 +79,8 @@ def rsvp(event_id):
     if success:
         flash('You have RSVP\'d to this event!', 'success')
         # Send SMS notification to event creator
-        send_rsvp_notification(event, current_user)
+        notification_message = f"🎉 {current_user.username} has RSVP'd to your event '{event.title}'!"
+        send_rsvp_notification(event.creator.phone, notification_message)
     else:
         flash(message, 'warning')
     return redirect(url_for('event.view', event_id=event.id))

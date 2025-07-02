@@ -271,19 +271,17 @@ def dashboard():
         current_app.logger.info("--- Dashboard POST request, form validated ---")
         media_path_for_db = None
 
-        uploaded_file = post_form.media_upload.data  # Access file via the form field
-        current_app.logger.info(f"post_form.media_upload.data: {uploaded_file}")  # Check if it's a FileStorage
+        uploaded_file = post_form.media_upload.data
+        current_app.logger.info(f"post_form.media_upload.data: {uploaded_file}")
 
-        if uploaded_file and uploaded_file.filename:  # Check FileStorage object
+        if uploaded_file and uploaded_file.filename:
             current_app.logger.info(f"FileField data present: {uploaded_file.filename}")
-            saved_path = save_post_media(uploaded_file)  # Your existing save function
+            saved_path = save_post_media(uploaded_file)
             if saved_path:
                 media_path_for_db = saved_path
                 current_app.logger.info(f"Media path for DB: {media_path_for_db}")
             else:
                 current_app.logger.warning("save_post_media returned None. Post will be created without media.")
-                # No need to redirect here, let the post creation continue without media
-                # or add a specific flash message if media upload was attempted but failed.
         else:
             current_app.logger.info("No file data provided in post_form.media_upload.data")
 
@@ -292,13 +290,12 @@ def dashboard():
             content=post_form.content.data,
             visibility=VisibilityEnum(post_form.visibility.data),
             author=actual_user_object,
-            media=media_path_for_db  # Will be None if no file or save failed
+            media=media_path_for_db
         )
         db.session.add(new_post)
         try:
             db.session.commit()
-            current_app.logger.info(
-                f"Post committed to DB. Media path: {media_path_for_db if media_path_for_db else 'N/A'}")
+            current_app.logger.info(f"Post committed to DB. Media path: {media_path_for_db if media_path_for_db else 'N/A'}")
             flash('Your post has been published!', 'success')
         except Exception as e:
             db.session.rollback()
@@ -306,30 +303,34 @@ def dashboard():
             flash('Error publishing post.', 'danger')
 
         return redirect(url_for('main.dashboard'))
-    elif request.method == 'POST':  # Form submitted but validate_on_submit() was false
+    elif request.method == 'POST':
         flash('Please correct the errors below.', 'danger')
         current_app.logger.warning(f"Post form validation failed. Errors: {post_form.errors}")
 
     page = request.args.get('page', 1, type=int)
     actual_current_user = current_user._get_current_object()
 
-    # Base conditions for posts visibility
-    conditions = []
-    conditions.append(Post.visibility == VisibilityEnum.PUBLIC)
+    # Get friend IDs for the current user
+    friend_ids = actual_current_user.friend_ids()
 
-    if actual_current_user.is_authenticated:
-        friend_ids = actual_current_user.friend_ids()
-        if friend_ids:
-            conditions.append(
-                (Post.visibility == VisibilityEnum.FRIENDS) & (Post.user_id.in_(friend_ids))
-            )
-        conditions.append(
-            (Post.visibility == VisibilityEnum.PRIVATE) & (Post.user_id == actual_current_user.id)
-        )
+    # Base query for posts
+    posts_query = Post.query
 
-    # Get posts and shares as a union
-    posts_query = Post.query.filter(or_(*conditions))
-    shares_query = db.session.query(Share).join(Post).filter(or_(*conditions))
+    # Apply visibility rules:
+    # 1. Show all public posts
+    # 2. Show friends' posts that are either public or friends-only
+    # 3. Show user's own posts regardless of visibility
+    visibility_conditions = [
+        Post.visibility == VisibilityEnum.PUBLIC,  # All public posts
+        (Post.visibility == VisibilityEnum.FRIENDS) & (Post.user_id.in_(friend_ids)),  # Friends' friends-only posts
+        (Post.user_id == actual_current_user.id)  # User's own posts (all visibility levels)
+    ]
+
+    # Apply the conditions to the posts query
+    posts_query = posts_query.filter(or_(*visibility_conditions))
+
+    # Get shares with the same visibility rules
+    shares_query = db.session.query(Share).join(Post).filter(or_(*visibility_conditions))
 
     # Combine posts and shares, ordered by timestamp
     combined_query = db.session.query(
@@ -351,7 +352,6 @@ def dashboard():
 
     # Paginate the combined results
     posts_per_page = current_app.config.get('POSTS_PER_PAGE', 10)
-    page = request.args.get('page', 1, type=int)
     pagination = combined_query.paginate(page=page, per_page=posts_per_page, error_out=False)
 
     # Fetch the actual posts and shares
